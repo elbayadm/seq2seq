@@ -1,0 +1,194 @@
+"""Sequence to Sequence parent model."""
+import os.path as osp
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import loss
+
+
+class Seq2Seq(nn.Module):
+    def __init__(self, opt, src_vocab_size, trg_vocab_size):
+        """Initialize model."""
+        nn.Module.__init__(self)
+        self.opt = opt
+        self.logger = opt.logger
+        self.src_vocab_size = src_vocab_size
+        self.trg_vocab_size = trg_vocab_size
+        self.seq_length = opt.max_trg_length
+        self.src_emb_dim = opt.dim_word_src
+        self.trg_emb_dim = opt.dim_word_trg
+        self.src_hidden_dim = opt.rnn_size_src
+        self.trg_hidden_dim = opt.rnn_size_trg
+        self.ctx_hidden_dim = opt.rnn_size_src
+        self.batch_size = opt.batch_size
+        assert self.trg_hidden_dim == self.ctx_hidden_dim, 'Sizes mismatch'  # FIXME
+
+        self.bidirectional = opt.bidirectional
+        self.nlayers_src = opt.num_layers_src
+        self.nlayers_trg = opt.num_layers_trg
+        self.dropout = opt.use_dropout
+        self.num_directions = 2 if self.bidirectional else 1
+        self.pad_token_src = 0
+        self.pad_token_trg = 0
+        self.ss_prob = 0. # scheduled sampling
+
+        self.src_hidden_dim = self.src_hidden_dim // 2 \
+            if self.bidirectional else self.src_hidden_dim
+
+        self.src_embedding = nn.Embedding(
+            self.src_vocab_size,
+            self.src_emb_dim,
+            self.pad_token_src
+        )
+        self.trg_embedding = nn.Embedding(
+            self.trg_vocab_size,
+            self.trg_emb_dim,
+            self.pad_token_trg
+        )
+
+        # print('Enc2Dec dims:', self.src_hidden_dim * self.num_directions, self.trg_hidden_dim)
+        self.encoder2decoder = nn.Linear(
+            self.src_hidden_dim * self.num_directions,
+            self.trg_hidden_dim
+        )
+        self.decoder2vocab = nn.Linear(self.trg_hidden_dim,
+                                       self.trg_vocab_size)
+
+    def init_weights(self):
+        """Initialize weights."""
+        # initrange = 0.1
+        # self.src_embedding.weight.data.uniform_(-initrange, initrange)
+        # self.trg_embedding.weight.data.uniform_(-initrange, initrange)
+        initdev = 0.01
+        self.src_embedding.weight.data.normal_(0.0, initdev)
+        self.trg_embedding.weight.data.normal_(0.0, initdev)
+
+        self.encoder2decoder.bias.data.fill_(0)
+        self.decoder2vocab.bias.data.fill_(0)
+
+    def get_init_state(self, input):
+        """Get cell states and hidden states."""
+        batch_size = input.size(0) \
+            if self.encoder.batch_first else input.size(1)
+        h0_encoder = Variable(torch.zeros(
+            self.encoder.num_layers * self.num_directions,
+            batch_size,
+            self.src_hidden_dim
+        ), requires_grad=False)
+        c0_encoder = Variable(torch.zeros(
+            self.encoder.num_layers * self.num_directions,
+            batch_size,
+            self.src_hidden_dim
+        ), requires_grad=False)
+
+        return h0_encoder.cuda(), c0_encoder.cuda()
+
+    def decode(self, logits):
+        """Return probability distribution over words."""
+        logits_reshape = logits.view(-1, self.trg_vocab_size)
+        word_probs = F.softmax(logits_reshape)
+        word_probs = word_probs.view(
+            logits.size()[0], logits.size()[1], logits.size()[2]
+        )
+        return word_probs
+
+    def define_loss(self, vocab):
+        opt = self.opt
+        ver = opt.loss_version.lower()
+        if ver == 'ml':
+            crit = loss.MLCriterion(opt)
+        elif ver == 'word':
+            crit = loss.WordSmoothCriterion(opt)
+        elif ver == "seq":
+            if opt.stratify_reward:
+                crit = loss.RewardSampler(opt, vocab)
+            else:
+                crit = loss.ImportanceSampler(opt, vocab)
+        else:
+            raise ValueError('unknown loss mode %s' % ver)
+        crit.log()
+        self.crit = crit
+
+    def define_old_loss(self, vocab):
+        opt = self.opt
+        if opt.sample_cap:
+            # Sampling from the captioning model itself
+            if 'cider' in opt.loss_version:
+                crit = loss.CiderRewardCriterion(opt, vocab)
+            elif 'hamming' in opt.loss_version:
+                crit = loss.HammingRewardCriterion(opt, vocab)
+            elif 'infersent' in opt.loss_version:
+                crit = loss.InfersentRewardCriterion(opt, vocab)
+            elif 'bleu' in opt.loss_version:
+                crit = loss.BleuRewardCriterion(opt, vocab)
+            elif opt.loss_version == "word":
+                crit = loss.WordSmoothCriterion(opt, vocab)
+            elif opt.loss_version == "word2":
+                crit = loss.WordSmoothCriterion2(opt)
+
+        elif opt.sample_reward:
+            if 'hamming' in opt.loss_version:
+                crit = loss.HammingRewardSampler(opt, vocab)
+            else:
+                raise ValueError('Loss function %s in sample_reward mode unknown' % (opt.loss_version))
+
+        elif opt.bootstrap:
+            crit = loss.DataAugmentedCriterion(opt)
+        elif opt.combine_caps_losses:
+            crit = loss.MultiLanguageModelCriterion(opt.seq_per_img)
+        else:
+            # The defualt ML
+            opt.logger.warn('Using baseline loss criterion')
+            crit = loss.LanguageModelCriterion(opt)
+        self.crit = crit
+
+    def load(self):
+        opt = self.opt
+        if vars(opt).get('start_from', None) is not None:
+            # check if all necessary files exist
+            assert osp.isfile(opt.infos_start_from),\
+                    "infos file %s does not exist" % opt.start_from
+            saved = torch.load(opt.start_from)
+            for k in list(saved):
+                if 'crit' in k:
+                    self.logger.warn('Deleting key %s' % k)
+                    del saved[k]
+            self.logger.warn('Loading the model dict (last checkpoint) %s'\
+                             % str(list(saved.keys())))
+            self.load_state_dict(saved)
+
+    def step(self, input_lines_src, input_lines_trg, output_lines_trg, mask):
+        opt = self.opt
+        if opt.loss_version.lower() == "seq":
+            # decoder_init_state, src_h, src_c = self.get_decoder_init_state(input_lines_src)
+            # src_c = c_t
+            # decoder_logit = self.forward_decoder(decoder_init_state,
+                                                 # src_h, src_c,
+                                                 # input_lines_trg)
+
+            decoder_logit = self.forward(input_lines_src, input_lines_trg)
+            ml_loss, reward_loss, stats = self.crit(self,
+                                                    input_lines_src,
+                                                    input_lines_trg,
+                                                    output_lines_trg,
+                                                    mask)
+            # ml_loss, reward_loss, stats = self.crit(self, decoder_init_state,
+                                                    # src_h, src_c,
+                                                    # input_lines_trg,
+                                                    # output_lines_trg,
+                                                    # mask)
+        else:
+            decoder_logit = self.forward(input_lines_src, input_lines_trg)
+            ml_loss, reward_loss, stats = self.crit(decoder_logit,
+                                                    output_lines_trg,
+                                                    mask)
+
+        if opt.loss_version.lower() == "ml":
+            final_loss = ml_loss
+        else:
+            final_loss = self.crit.alpha * reward_loss + (1 - self.crit.alpha) * ml_loss
+        return ml_loss, final_loss, stats
+
+
+

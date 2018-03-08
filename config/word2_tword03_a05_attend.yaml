@@ -1,0 +1,30 @@
+modelname:  word2_tword03_a05_attend
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+restart : 1
+
+# Logging:
+save_checkpoint_every: 5000
+losses_log_every : 100
+
+optim : adam
+# batch_size: 10
+# valid_batch_size: 20
+
+rnn_size_src : 2000
+rnn_size_trg : 2000
+dim_word_src : 620
+dim_word_trg : 620
+num_layers_src : 2
+num_layers_trg : 1
+bidirectional : 1
+decode: greedy 
+model: attention
+
+# Loss
+sample_cap: 1
+loss_version: word2
+alpha_word : 0.5
+tau_word: 0.3
