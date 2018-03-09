@@ -1,0 +1,21 @@
+modelname : combine_strat_rhamming_pool1_tsent013_a03_word_idf_tword005_a04
+model: attention
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+
+batch_size: 40
+valid_batch_size: 15
+
+# Loss:
+loss_version : seq
+reward : hamming
+stratify_reward  : 1
+tau_sent : .13
+alpha_sent : 0.3
+# lazy_rnn : 1
+combine_loss : 1
+tau_word : 0.05
+alpha_word : 0.4
+rare_tfidf : 1
