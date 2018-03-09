@@ -1,3 +1,4 @@
 configargparse
 tensorboardX
 pytorch
+h5py
