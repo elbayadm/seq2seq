@@ -24,7 +24,6 @@ def train(opt):
     opt.logger.warn('GPU ID: %s | available memory: %dM' \
                     % (os.environ['CUDA_VISIBLE_DEVICES'], get_gpu_memory(gpu_id)))
 
-    from tensorboardX import SummaryWriter
     import torch
     from torch.autograd import Variable
     from loader import textDataLoader
@@ -32,6 +31,7 @@ def train(opt):
     from models.evaluate import evaluate_model
     import utils
     import utils.logging as lg
+    from tensorboardX import SummaryWriter
 
     # reproducibility:
     torch.manual_seed(opt.seed)
