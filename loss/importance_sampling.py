@@ -56,13 +56,15 @@ class ImportanceSampler(nn.Module):
             self.logger.info('Sampled loss:')
             self.loss_sampled.log()
 
-    def forward(self, model, input_lines_src,
-                input_lines_trg, output_lines_trg,
+    def forward(self, model, h_t, src_h, c_t,
+                input_lines_trg, trg_lengths, output_lines_trg,
                 mask, scores=None):
         ilabels = input_lines_trg
         olabels = output_lines_trg
-        # truncate
-        logp = model.forward(input_lines_src, ilabels)
+        logp = model.forward_decoder(h_t,
+                                     src_h, c_t,
+                                     ilabels,
+                                     trg_lengths)
         # Remove BOS token
         seq_length = logp.size(1)
         target = olabels[:, :seq_length]
@@ -107,9 +109,11 @@ class ImportanceSampler(nn.Module):
                                                                 mask,
                                                                 importance_normalized)
             else:
+                # Forward the sampled captions
                 mc_output, stats_sampled = self.batch_loss(model,
-                                                           input_lines_src,
+                                                           h_t, src_h, c_t,
                                                            monte_carlo[0],
+                                                           trg_lengths,
                                                            monte_carlo[1],
                                                            mask,
                                                            importance_normalized)
@@ -134,8 +138,9 @@ class ImportanceSampler(nn.Module):
                                                                     importance_normalized)
                 else:
                     mc_output, stats_sampled = self.batch_loss(model,
-                                                               input_lines_src,
+                                                               h_t, src_h, c_t,
                                                                monte_carlo[mci][0],
+                                                               trg_lengths,
                                                                monte_carlo[mci][1],
                                                                mask,
                                                                importance_normalized)
@@ -149,13 +154,16 @@ class ImportanceSampler(nn.Module):
             output /= MC
         return loss_gt, output, stats
 
-    def batch_loss(self, model, input_lines_src,
-                   ipreds_matrix, opreds_matrix,
+    def batch_loss(self, model, h_t, src_h, c_t,
+                   ipreds_matrix, trg_lengths, opreds_matrix,
                    mask, scores):
         """
         forward the new sampled labels and return the loss
         """
-        logp = model.forward(input_lines_src, ipreds_matrix)
+        logp = model.forward_decoder(h_t, src_h, c_t,
+                                     ipreds_matrix,
+                                     trg_lengths)
+
         if self.combine_loss:
             ml, wl, stats = self.loss_sampled(logp,
                                               opreds_matrix,

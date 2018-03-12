@@ -3,6 +3,9 @@ import pickle
 import h5py
 import numpy as np
 
+_EOS = 1
+_BOS = 2
+
 
 class textDataLoader(object):
     """
@@ -40,9 +43,11 @@ class textDataLoader(object):
 
     def get_src_batch(self, split, batch_size=None):
         batch_size = batch_size or self.batch_size
-        label_batch = np.zeros([batch_size, self.seq_length], dtype ='int')
-        ref = 'labels_%s' % split
-        max_index = len(self.h5_file[ref])
+        label_batch = np.zeros([batch_size, self.seq_length], dtype='int')
+        len_batch = []
+        pointer = 'labels_%s' % split
+        len_pointer = 'lengths_%s' % split
+        max_index = len(self.h5_file[pointer])
         wrapped = False
         for i in range(batch_size):
             ri = self.iterators[split]
@@ -51,21 +56,26 @@ class textDataLoader(object):
                 ri_next = 0
                 wrapped = True
             self.iterators[split] = ri_next
-            label_batch[i] = self.h5_file[ref][ri, :self.seq_length]
-        data = {}
-        data['labels'] = label_batch
-        data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': max_index, 'wrapped': wrapped}
-        return data
+            label_batch[i] = self.h5_file[pointer][ri, :self.seq_length]
+            len_batch.append(self.h5_file[len_pointer][ri])
 
-    def get_trg_batch(self, split, batch_size=None):
+        order = sorted(range(batch_size), key=lambda k: -len_batch[k])
+        data = {}
+        data['labels'] = label_batch[order]
+        data['lengths'] = [len_batch[k] for k in order]
+        data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': max_index, 'wrapped': wrapped}
+        return data, order
+
+    def get_trg_batch(self, split, order, batch_size=None):
         batch_size = batch_size or self.batch_size
-        in_label_batch = np.zeros([batch_size, self.seq_length], dtype='int')
-        out_label_batch = np.zeros([batch_size, self.seq_length], dtype='int')
-        mask_batch = np.zeros([batch_size, self.seq_length], dtype='float32')
-
-        ref = 'labels_%s' % split
-        oref = 'out_labels_%s' % split
-        max_index = len(self.h5_file[ref])
+        in_label_batch = np.zeros([batch_size, self.seq_length + 1], dtype='int')
+        out_label_batch = np.zeros([batch_size, self.seq_length + 1], dtype='int')
+        mask_batch = np.zeros([batch_size, self.seq_length + 1], dtype='float32')
+        len_batch = []
+        pointer = 'labels_%s' % split
+        mask_pointer = 'mask_%s' % split
+        len_pointer = 'lengths_%s' % split
+        max_index = len(self.h5_file[pointer])
         wrapped = False
         for i in range(batch_size):
             ri = self.iterators[split]
@@ -74,18 +84,26 @@ class textDataLoader(object):
                 ri_next = 0
                 wrapped = True
             self.iterators[split] = ri_next
-            in_label_batch[i] = self.h5_file[ref][ri, :self.seq_length]
-            out_label_batch[i] = self.h5_file[oref][ri, :self.seq_length]
-            mask_batch[i] = self.h5_file['mask_%s' % split][ri, :self.seq_length]
+            # add <bos>
+            in_label_batch[i, 0] = _BOS
+            in_label_batch[i, 1:] = self.h5_file[pointer][ri, :self.seq_length]
+            # add <eos>
+            line = self.h5_file[pointer][ri, :self.seq_length]
+            ll = self.h5_file[len_pointer][ri]
+            len_batch.append(ll + 1)
+            out_label_batch[i] = np.insert(line, ll, _EOS)
+            lmask = self.h5_file['mask_%s' % split][ri, :self.seq_length]
+            mask_batch[i] = np.insert(lmask, ll, 1)
 
         data = {}
-        data['labels'] = in_label_batch
-        data['out_labels'] = out_label_batch
-        data['mask'] = mask_batch
-        data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': max_index, 'wrapped': wrapped}
+        data['labels'] = in_label_batch[order]
+        data['out_labels'] = out_label_batch[order]
+        data['mask'] = mask_batch[order]
+        data['lengths'] = [len_batch[k] for k in order]
+        data['bounds'] = {'it_pos_now': self.iterators[split],
+                          'it_max': max_index, 'wrapped': wrapped}
         return data
 
     def reset_iterator(self, split):
         self.iterators[split] = 0
-
 

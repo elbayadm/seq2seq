@@ -57,7 +57,7 @@ def train(opt):
     iteration, epoch, opt, infos, history = ms.recover_infos(opt)
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
-    # iteration -= 1  # start with an evaluation
+    iteration -= 1  # start with an evaluation
     opt.logger.info('Starting from Epoch %d, iteration %d' % (epoch, iteration))
     # Recover data iterator and best perf
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
@@ -113,19 +113,21 @@ def train(opt):
         torch.cuda.synchronize()
         start = time.time()
         # Load data from train split (0)
-        data_src = src_loader.get_src_batch('train')
-        input_lines_src = data_src['labels']
-        input_lines_src = Variable(torch.from_numpy(input_lines_src),
-                                   requires_grad=False).cuda()
+        data_src, order = src_loader.get_src_batch('train')
+        tmp = [data_src['labels']]
+        input_lines_src, = [Variable(torch.from_numpy(_),
+                                    requires_grad=False).cuda()
+                           for _ in tmp]
+        src_lengths = data_src['lengths']
 
-        data_trg = trg_loader.get_trg_batch('train')
+        data_trg = trg_loader.get_trg_batch('train', order)
         tmp = [data_trg['labels'], data_trg['out_labels'], data_trg['mask']]
         input_lines_trg, output_lines_trg, mask = [Variable(torch.from_numpy(_),
                                                             requires_grad=False).cuda()
                                                    for _ in tmp]
-
+        trg_lengths = data_trg['lengths']
         optimizer.zero_grad()
-        ml_loss, loss, stats = model.step(input_lines_src, input_lines_trg, output_lines_trg, mask)
+        ml_loss, loss, stats = model.step(input_lines_src, src_lengths, input_lines_trg, trg_lengths, output_lines_trg, mask)
         optimizer.zero_grad()
         loss.backward()
         grad_norm = []

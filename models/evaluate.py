@@ -181,17 +181,18 @@ def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
     loss_evals = 0
     while True:
         # get batch
-        data_src = src_loader.get_src_batch(split, batch_size)
-        input_lines_src = data_src['labels']
-        input_lines_src = Variable(torch.from_numpy(input_lines_src),
-                                   requires_grad=False).cuda()
-
-        data_trg = trg_loader.get_trg_batch(split, batch_size)
+        data_src, order = src_loader.get_src_batch('train')
+        tmp = [data_src['labels']]
+        input_lines_src, = [Variable(torch.from_numpy(_),
+                                    requires_grad=False).cuda()
+                           for _ in tmp]
+        src_lengths = data_src['lengths']
+        data_trg = trg_loader.get_trg_batch('train', order)
         tmp = [data_trg['labels'], data_trg['out_labels'], data_trg['mask']]
         input_lines_trg_gold, output_lines_trg_gold, mask = [Variable(torch.from_numpy(_),
-                                                                     requires_grad=False).cuda()
-                                                            for _ in tmp]
-
+                                                                      requires_grad=False).cuda()
+                                                             for _ in tmp]
+        trg_lengths = data_trg['lengths']
         n += batch_size
         # decoder_logit = model(input_lines_src, input_lines_trg_gold)
         # if model.opt.sample_reward:
@@ -200,8 +201,8 @@ def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
         # else:
             # ml_loss, loss, stats = model.crit(decoder_logit, output_lines_trg_gold, mask)
 
-        ml_loss, loss, _ = model.step(input_lines_src,
-                                      input_lines_trg_gold,
+        ml_loss, loss, _ = model.step(input_lines_src, src_lengths,
+                                      input_lines_trg_gold, trg_lengths,
                                       output_lines_trg_gold,
                                       mask)
         loss_sum += loss.data[0]
@@ -212,7 +213,7 @@ def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
         # print('GPU:', os.environ['CUDA_VISIBLE_DEVICES'])
         start = time.time()
         # Decode a minibatch greedily __TODO__ add beam search decoding
-        batch_preds, _ = model.sample(input_lines_src, opt=eval_kwargs)
+        batch_preds, _ = model.sample(input_lines_src, src_lengths, opt=eval_kwargs)
         if isinstance(batch_preds, list):
             # wiht beam size unpadded preds
             sent_preds = [decode_sequence(trg_loader.get_vocab(),

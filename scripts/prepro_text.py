@@ -1,19 +1,21 @@
 import os
+import sys
 import pickle
 import json
 import argparse
 import random
 from random import seed
 import string
-# non-standard dependencies:
 import h5py
 import numpy as np
 from scipy.misc import imread, imresize
-
+sys.path.insert(0, '.')
+from utils import pd
 
 def build_vocab(sentences, params):
     """
     Build vocabulary
+    Note: I use the perl scripts instead
     """
     # count up the number of words
     counts = {}
@@ -45,71 +47,47 @@ def build_vocab(sentences, params):
     # for i in range(max_len+1):
         # print('%2d: %10d   %f%%' % (i, sent_lengths.get(i, 0), sent_lengths.get(i, 0)*100.0/sum_len))
 
-    # lets now produce the final annotations
-    if bad_count > 0:
-        # additional special UNK token we will use below to map infrequent words to
-        print('inserting the special UNK token')
-        vocab.insert(0, '<EOS>')
-        vocab.insert(0, '<BOS>')
-        vocab.insert(0, '<UNK>')
+    # additional special UNK token we will use below to map infrequent words to
+    print('inserting the special UNK token')
+    vocab.insert(0, "<UNK>")
+    vocab.insert(0, "<BOS>")
+    vocab.insert(0, "<EOS>")
+    vocab.insert(0, "<PAD>")
+    # Dump the statistics for later use:
+    pd({"counts": counts,
+        "vocab": vocab,
+        "bad words": bad_words,
+        "lengths": sent_lengths},
+       "data/WMT14/wmt14.stats")
 
     return vocab
 
 
-def encode_src_sentences(sentences, params, wtoi):
+def encode_sentences(sentences, params, wtoi):
     """
-    encode all captions into one large array, which will be 1-indexed.
-    also produces label_start_ix and label_end_ix which store 1-indexed
-    and inclusive (Lua-style) pointers to the first and last caption for
-    each image in the dataset.
+    encode all sentences into one large array, which will be 1-indexed.
+    No special tokens are added, except from the <pad> after the effective length
     """
     max_length = params['max_length']
     lengths = []
-    M = len(sentences)
-    IL = np.zeros((M, max_length), dtype='uint32')  # <PAD> token is 0
+    m = len(sentences)
+    IL = np.zeros((m, max_length), dtype='uint32')  # <PAD> token is 0
+    M = np.zeros((m, max_length), dtype='uint32')  # <PAD> token is 0
     for i, sent in enumerate(sentences):
         lengths.append(len(sent))
         for k, w in enumerate(sent):
             if k < max_length:
                 IL[i, k] = wtoi[w] if w in wtoi else wtoi['<UNK>']
+                M[i, k] = int(w in wtoi)
         if not i % 1000:
             print('%.2f%%' % (i / len(sentences) * 100))
-    assert np.all(np.array(lengths) > 0), 'error: some caption had no words?'
-    return IL
-
-
-def encode_trg_sentences(sentences, params, wtoi):
-    """
-    encode all captions into one large array, which will be 1-indexed.
-    also produces label_start_ix and label_end_ix which store 1-indexed
-    and inclusive (Lua-style) pointers to the first and last caption for
-    each image in the dataset.
-    """
-    max_length = params['max_length']
-    lengths = []
-    M = len(sentences)
-    OL = np.zeros((M, max_length), dtype='uint32')
-    IL = np.zeros((M, max_length), dtype='uint32')
-    Mask = np.zeros((M, max_length), dtype='uint32')
-    for i, sent in enumerate(sentences):
-        lengths.append(len(sent))
-        for k, w in enumerate(sent + ['<EOS>']):
-            OL[i, k] = wtoi[w] if w in wtoi else wtoi['<UNK>']
-            Mask[i, k] = 1 if w in wtoi else 0
-        for k, w in enumerate(['<BOS>'] + sent):
-            IL[i, k] = wtoi[w] if w in wtoi else wtoi['<UNK>']
-        if not i % 1000:
-            print('%.2f%%' % (i / len(sentences) * 100))
-
-    # note: word indices are 1-indexed, and captions are padded with zeros
-    assert np.all(np.array(lengths) > 0), 'error: some caption had no words?'
-    return IL, OL, Mask
+    assert np.all(np.array(lengths) > 0), 'error: some line has no words'
+    return IL, M, lengths
 
 
 def main_trg(params):
     """
     Main preprocessing
-    TODO : Rewrite this stuff so that you only save one array with the sequences lengths.
     """
     with open(params['train_trg'], 'r') as f:
         sentences = f.readlines()
@@ -125,32 +103,37 @@ def main_trg(params):
     vocab.insert(0, "<BOS>")
     vocab.insert(0, "<EOS>")
     vocab.insert(0, "<PAD>")
-    itow = {i: w for i, w in enumerate(vocab)} # a 1-indexed vocab translation table
-    wtoi = {w: i for i, w in enumerate(vocab)} # inverse table
+    itow = {i: w for i, w in enumerate(vocab)}
+    wtoi = {w: i for i, w in enumerate(vocab)}  # inverse table
     # encode captions in large arrays, ready to ship to hdf5 file
-    IL_train_trg, OL_train_trg, Mask_train = encode_trg_sentences(sentences, params, wtoi)
+    IL_train, Mask_train, Lengths_train = encode_sentences(sentences, params, wtoi)
     with open(params['val_trg'], 'r') as f:
         sentences = f.readlines()
         sentences = [sent.strip().split()[:(params['max_length'] - 1)] for sent in sentences]
     print("Read %d lines from %s" % (len(sentences), params['val_trg']))
-    IL_val_trg, OL_val_trg, Mask_val = encode_trg_sentences(sentences, params, wtoi)
+    IL_val, Mask_val, Lengths_val = encode_sentences(sentences, params, wtoi)
     with open(params['test_trg'], 'r') as f:
         sentences = f.readlines()
         sentences = [sent.strip().split()[:(params['max_length'] - 1)] for sent in sentences]
     print("Read %d lines from %s" % (len(sentences), params['test_trg']))
-    IL_test_trg, OL_test_trg, Mask_test = encode_trg_sentences(sentences, params, wtoi)
+    IL_test, Mask_test, Lengths_test = encode_sentences(sentences, params, wtoi)
     # create output h5 file
     f = h5py.File(params['output_h5_trg'], "w")
-    f.create_dataset("labels_train", dtype='uint32', data=IL_train_trg)
-    f.create_dataset("out_labels_train", dtype='uint32', data=OL_train_trg)
+    f.create_dataset("labels_train", dtype='uint32', data=IL_train)
     f.create_dataset("mask_train", dtype='uint32', data=Mask_train)
-    f.create_dataset("labels_val", dtype='uint32', data=IL_val_trg)
-    f.create_dataset("out_labels_val", dtype='uint32', data=OL_val_trg)
-    f.create_dataset("mask_val", dtype='uint32', data=Mask_val)
+    f.create_dataset("lengths_train", dtype='uint32', data=Lengths_train)
 
-    f.create_dataset("labels_test", dtype='uint32', data=IL_test_trg)
-    f.create_dataset("out_labels_test", dtype='uint32', data=OL_test_trg)
+
+    f.create_dataset("labels_val", dtype='uint32', data=IL_val)
+    f.create_dataset("mask_val", dtype='uint32', data=Mask_val)
+    f.create_dataset("lengths_val", dtype='uint32', data=Lengths_val)
+
+
+    f.create_dataset("labels_test", dtype='uint32', data=IL_test)
     f.create_dataset("mask_test", dtype='uint32', data=Mask_test)
+    f.create_dataset("lengths_test", dtype='uint32', data=Lengths_test)
+
+
     print('wrote ', params['output_h5_trg'])
     pickle.dump({'itow': itow, 'params': params},
                 open(params['output_info_trg'], 'wb'))
@@ -176,23 +159,29 @@ def main_src(params):
     itow = {i: w for i, w in enumerate(vocab)} # a 1-indexed vocab translation table
     wtoi = {w: i for i, w in enumerate(vocab)} # inverse table
     # encode captions in large arrays, ready to ship to hdf5 file
-    IL_train_src = encode_src_sentences(sentences, params, wtoi)
+    IL_train_src, _, Lengths_train = encode_sentences(sentences, params, wtoi)
     with open(params['val_src'], 'r') as f:
         sentences = f.readlines()
         sentences = [sent.strip().split()[:(params['max_length'])] for sent in sentences]
     print("Read %d lines from %s" % (len(sentences), params['val_src']))
-    IL_val_src = encode_src_sentences(sentences, params, wtoi)
+    IL_val_src, _, Lengths_val = encode_sentences(sentences, params, wtoi)
     with open(params['test_src'], 'r') as f:
         sentences = f.readlines()
         sentences = [sent.strip().split()[:(params['max_length'])] for sent in sentences]
     print("Read %d lines from %s" % (len(sentences), params['test_src']))
-    IL_test_src = encode_src_sentences(sentences, params, wtoi)
+    IL_test_src, _, Lengths_test = encode_sentences(sentences, params, wtoi)
 
     # create output h5 file
     f = h5py.File(params['output_h5_src'], "w")
     f.create_dataset("labels_train", dtype='uint32', data=IL_train_src)
+    f.create_dataset("lengths_train", dtype='uint32', data=Lengths_train)
+
     f.create_dataset("labels_val", dtype='uint32', data=IL_val_src)
+    f.create_dataset("lengths_val", dtype='uint32', data=Lengths_val)
+
     f.create_dataset("labels_test", dtype='uint32', data=IL_test_src)
+    f.create_dataset("lengths_test", dtype='uint32', data=Lengths_test)
+
     print('wrote ', params['output_h5_src'])
     pickle.dump({'itow': itow, 'params': params},
                 open(params['output_info_src'], 'wb'))

@@ -42,18 +42,19 @@ class RewardSampler(nn.Module):
             self.loss_sampled.log()
 
     def forward(self, model,
-                input_lines_src,
+                h_t, src_h, c_t,
                 input_lines_trg,
+                trg_lengths,
                 output_lines_trg,
                 mask, scores=None):
+
         ilabels = input_lines_trg
         olabels = output_lines_trg
-        # truncate
-        # logp = model.forward_decoder(decoder_init_state,
-                                     # src_h, src_c,
-                                     # ilabels)
+        logp = model.forward_decoder(h_t,
+                                     src_h, c_t,
+                                     ilabels,
+                                     trg_lengths)
 
-        logp = model.forward(input_lines_src, ilabels)
         # Remove BOS token
         seq_length = logp.size(1)
         target = olabels[:, :seq_length]
@@ -75,14 +76,14 @@ class RewardSampler(nn.Module):
         for mci in range(MC):
             ipreds_matrix, opreds_matrix, _, stats = self.sampler.nmt_sample(logp, target)
             if self.lazy_rnn:
-                mc_output, stats_sampled = self.batch_loss_lazy(logp, opreds_matrix, mask, scores)
+                mc_output, stats_sampled = self.batch_loss_lazy(logp, opreds_matrix,
+                                                                mask, scores)
             else:
-                # Forward the sampled captions
+                # Forward the sampled sentences properly
                 mc_output, stats_sampled = self.batch_loss(model,
-                                                           input_lines_src,
-                                                           # decoder_init_state,
-                                                           # src_h, src_c,
+                                                           h_t, src_h, c_t,
                                                            ipreds_matrix,
+                                                           trg_lengths,
                                                            opreds_matrix,
                                                            mask, scores)
             if not mci:
@@ -93,16 +94,15 @@ class RewardSampler(nn.Module):
         return loss_gt, output, stats
 
     def batch_loss(self, model,
-                   input_lines_src,
-                   # decoder_init_state, src_h, src_c,
-                   ipreds_matrix, opreds_matrix, mask, scores):
+                   h_t, src_h, c_t,
+                   ipreds_matrix, trg_lengths,
+                   opreds_matrix, mask, scores):
         """
         forward the new sampled labels and return the loss
         """
-        # logp = model.forward_decoder(decoder_init_state,
-                                     # src_h, src_c,
-                                     # ipreds_matrix)
-        logp = model.forward(input_lines_src, ipreds_matrix)
+        logp = model.forward_decoder(h_t, src_h, c_t,
+                                     ipreds_matrix,
+                                     trg_lengths)
         if self.combine_loss:
             ml, wl, stats = self.loss_sampled(logp,
                                               opreds_matrix,

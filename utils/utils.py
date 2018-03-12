@@ -1,18 +1,25 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 import os
 import os.path as osp
 import sys
 from collections import Counter
 import math
+import pickle
 from scipy.special import binom
 import numpy as np
 from scipy.spatial.distance import hamming
 
-
 _BOS = 2
 _EOS = 1
+
+
+def pl(path):
+    return pickle.load(open(path, 'rb'),
+                       encoding='iso-8859-1')
+
+
+def pd(obj, path):
+    pickle.dump(obj, open(path, 'wb'),
+                protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def to_contiguous(tensor):

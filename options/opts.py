@@ -120,7 +120,7 @@ def add_loss_params(parser):
     parser.add('--alpha_sent', type=float,
                default=0.4, help='Scalar used to weight the losses')
     parser.add('--tau_sent', type=float,
-               default=0, help='Temperature applied to the sentences scores (r)')
+               default=0.1, help='Temperature applied to the sentences scores (r)')
     parser.add('--tau_sent_q', type=float,
                default=0.3, help='Temperature applied to the sentences scores (q) if relevant')
 
@@ -196,8 +196,13 @@ def add_generic_params(parser):
     parser.add('--decode', type=str, default='greedy')
     parser.add('--rnn_size_src', type=int,
                default=2000, help='size of the rnn in number of hidden nodes in each layer')
+    parser.add('--rnn_type_src', type=str,
+               default='lstm', help='rnn, gru, or lstm')
+
     parser.add('--rnn_size_trg', type=int,
                default=2000, help='size of the rnn in number of hidden nodes in each layer')
+    parser.add('--rnn_type_trg', type=str,
+               default='lstm', help='rnn, gru, or lstm')
     parser.add('--num_layers_src', type=int,
                default=2, help='number of layers in the RNN')
     parser.add('--num_layers_trg', type=int,

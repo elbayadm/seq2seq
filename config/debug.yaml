@@ -23,4 +23,7 @@ decode: greedy
 model: attention
 
 # Loss
-loss_version : ml
+loss_version : seq
+reward: bleu4
+importance_sampler : hamming
+stratify_reward : 0

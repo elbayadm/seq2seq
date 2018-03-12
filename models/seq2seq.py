@@ -158,28 +158,21 @@ class Seq2Seq(nn.Module):
                              % str(list(saved.keys())))
             self.load_state_dict(saved)
 
-    def step(self, input_lines_src, input_lines_trg, output_lines_trg, mask):
+    def step(self, input_lines_src, src_lengths,
+             input_lines_trg, trg_lengths, output_lines_trg, mask):
         opt = self.opt
         if opt.loss_version.lower() == "seq":
-            # decoder_init_state, src_h, src_c = self.get_decoder_init_state(input_lines_src)
-            # src_c = c_t
-            # decoder_logit = self.forward_decoder(decoder_init_state,
-                                                 # src_h, src_c,
-                                                 # input_lines_trg)
-
-            decoder_logit = self.forward(input_lines_src, input_lines_trg)
-            ml_loss, reward_loss, stats = self.crit(self,
-                                                    input_lines_src,
+            # Avoid re-encoding the sources when sampling other targets
+            src_h, (h_t, c_t) = self.get_decoder_init_state(input_lines_src, src_lengths)
+            ml_loss, reward_loss, stats = self.crit(self, h_t, src_h, c_t,
                                                     input_lines_trg,
+                                                    trg_lengths,
                                                     output_lines_trg,
                                                     mask)
-            # ml_loss, reward_loss, stats = self.crit(self, decoder_init_state,
-                                                    # src_h, src_c,
-                                                    # input_lines_trg,
-                                                    # output_lines_trg,
-                                                    # mask)
+
         else:
-            decoder_logit = self.forward(input_lines_src, input_lines_trg)
+            # init and forward decoder combined
+            decoder_logit = self.forward(input_lines_src, src_lengths, input_lines_trg, trg_lengths)
             ml_loss, reward_loss, stats = self.crit(decoder_logit,
                                                     output_lines_trg,
                                                     mask)
