@@ -1,0 +1,14 @@
+modelname:  baseline_attend_newv
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+
+# batch_size: 80
+# valid_batch_size: 25
+decode: greedy 
+model: attention
+
+# Loss
+loss_version : ml
+
