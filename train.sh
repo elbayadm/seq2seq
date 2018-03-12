@@ -19,7 +19,8 @@ echo titanx:$TX besteffort $BQ k40 tolereance $K40
 shift $((OPTIND-1))
 
 JOB=$1
-MEM=$2
+BRANCH=$2
+MEM=$3
 
 echo traininig $JOB
 mkdir -p 'save/'$JOB
@@ -42,7 +43,7 @@ if [ $BQ ]; then
            -t besteffort -t idempotent \
            -p $oarprop \
            -O  save/$JOB/stdout -E save/$JOB/stderr\
-           'python nmt.py -c config/'$JOB'.yaml'"
+           'git checkout '$BRANCH' && python nmt.py -c config/'$JOB'.yaml'"
     echo 'Running' $cmd
     eval $cmd
 else
@@ -50,9 +51,8 @@ else
     cmd="oarsub -l \"walltime=100:0:0\" -n $JOB \
             -O  save/$JOB/stdout -E save/$JOB/stderr\
             -p $oarprop\
-            'python nmt.py -c config/'$JOB'.yaml'"
+            'git checkout '$BRANCH' && python nmt.py -c config/'$JOB'.yaml'"
     eval $cmd
 fi
-
 
 echo $JOB >> RUNNING
