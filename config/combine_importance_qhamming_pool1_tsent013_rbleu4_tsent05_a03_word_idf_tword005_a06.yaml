@@ -2,11 +2,12 @@ modelname : combine_importance_qhamming_pool1_tsent013_rbleu4_tsent05_a03_word_i
 model: attention
 
 # Data:
-input_data_src: data/WMT14/en_src
-input_data_trg: data/WMT14/fr_trg
+input_data_src: data/WMT14/en_src_cmp
+input_data_trg: data/WMT14/fr_trg_cmp
 
 batch_size: 40
 valid_batch_size: 15
+max_epochs : 5
 
 # loss:
 loss_version : seq

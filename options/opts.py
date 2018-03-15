@@ -219,7 +219,7 @@ def add_generic_params(parser):
 def add_optim_params(parser):
     # Optimization: General
     parser.add('--max_epochs', type=int,
-               default=4, help='number of epochs')
+               default=5, help='number of epochs')
     parser.add('--grad_clip', type=float,
                default=1, help='clip gradients at this value')
 

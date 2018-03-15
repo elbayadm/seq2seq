@@ -42,12 +42,12 @@ def train(opt):
     opt.logger.warn('Running in dev branch')
     opt.logger.info('Reading data ...')
     src_loader = textDataLoader({'h5_file': opt.input_data_src+'.h5',
-                                 'infos_file': opt.input_data_src+'.pkl',
+                                 'infos_file': opt.input_data_src+'.infos',
                                  'batch_size': opt.batch_size},
                                 logger=opt.logger)
 
     trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
-                                 'infos_file': opt.input_data_trg+'.pkl',
+                                 'infos_file': opt.input_data_trg+'.infos',
                                  'batch_size': opt.batch_size},
                                 logger=opt.logger)
 
@@ -163,7 +163,7 @@ def train(opt):
             opt.logger.warn('Evaluating the model')
             model.eval()
             eval_kwargs = {'split': 'val', 'batch_size': opt.valid_batch_size,
-                           "beam_size": opt.beam_size}
+                           "beam_size": 1}  # otherwise slow
             _, val_ml_loss, val_loss, bleu_moses = evaluate_model(model, src_loader, trg_loader,
                                                                   opt.logger, eval_kwargs)
             opt.logger.info('Iteration : %d : BLEU: %.5f ' % (iteration, bleu_moses))

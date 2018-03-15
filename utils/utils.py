@@ -8,9 +8,6 @@ from scipy.special import binom
 import numpy as np
 from scipy.spatial.distance import hamming
 
-_BOS = 2
-_EOS = 1
-
 
 def pl(path):
     return pickle.load(open(path, 'rb'),
@@ -33,7 +30,7 @@ def to_contiguous(tensor):
 
 
 
-def decode_sequence(ix_to_word, seq):
+def decode_sequence(ix_to_word, seq, eos, bos):
     """
     Decode sequence into natural language
     Input: seq, N*D numpy array, with element 0 .. vocab_size.
@@ -44,8 +41,8 @@ def decode_sequence(ix_to_word, seq):
         txt = []
         for j in range(D):
             ix = seq[i, j]
-            if ix > 0 and not ix == _EOS:
-                if ix == _BOS:
+            if ix > 0 and not ix == eos:
+                if ix == bos:
                     continue
                 else:
                     txt.append(ix_to_word[ix])

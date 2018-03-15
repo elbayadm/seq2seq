@@ -7,8 +7,10 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from .beam_search import Beam
 from .seq2seq import Seq2Seq
 from .lstm import LSTMAttentionDot
-_BOS = 2
-_EOS = 1
+_BOS = 3
+_EOS = 2
+_UNK = 1
+_PAD = 0
 
 
 class Attention(Seq2Seq):
@@ -119,7 +121,7 @@ class Attention(Seq2Seq):
         dec_states = [Variable(h_0.data.repeat(1, beam_size, 1)),
                       Variable(c_0.data.repeat(1, beam_size, 1))]
 
-        beam = [Beam(beam_size, cuda=True) for k in range(batch_size)]
+        beam = [Beam(beam_size, opt) for k in range(batch_size)]
 
         batch_idx = list(range(batch_size))
         remaining_sents = batch_size
@@ -140,9 +142,8 @@ class Attention(Seq2Seq):
             dec_out = trg_h_t.squeeze(1)
             out = F.softmax(self.decoder2vocab(dec_out)).unsqueeze(0)
 
-            word_lk = out.view( beam_size,
-                               remaining_sents,
-                               -1).transpose(0, 1).contiguous()
+            word_lk = out.view(beam_size,
+                               remaining_sents, -1).transpose(0, 1).contiguous()
 
             active = []
             for b in range(batch_size):
@@ -207,29 +208,29 @@ class Attention(Seq2Seq):
             allHyp += [hyps]
         return allHyp, allScores
 
-    def sample(self, input_src, ctx_mask=None, opt={}):
+    def sample(self, input_src, src_lengths, ctx_mask=None, opt={}):
         beam_size = opt.get('beam_size', 1)
         if beam_size > 1:
-            return self.sample_beam(input_src, ctx_mask, opt)
+            return self.sample_beam(input_src, src_lengths, ctx_mask, opt)
         batch_size = input_src.size(0)
-        seq = []
-        src_h, (h_0, c_0) = self.get_decoder_init_state(input_src)
-        ctx = src_h.transpose(0, 1)
+        BOS = opt.get('BOS', _BOS)
+        EOS = opt.get('EOS', _EOS)
 
+        seq = []
+        src_h, (h_0, c_0) = self.get_decoder_init_state(input_src, src_lengths)
+        ctx = src_h
         for t in range(self.opt.max_trg_length):
             if t == 0:
-                input_trg = Variable(torch.LongTensor([[_BOS] for i in range(batch_size)])).cuda()
+                input_trg = Variable(torch.LongTensor([[BOS] for i in range(batch_size)])).cuda()
                 h_t = h_0
                 c_t = c_0
             trg_emb = self.trg_embedding(input_trg)
-
             trg_h, (h_t, c_t) = self.decoder(
                 trg_emb,
                 (h_t, c_t),
                 ctx,
                 ctx_mask
             )
-
             trg_h_reshape = trg_h.contiguous().view(
                 trg_h.size()[0] * trg_h.size()[1],
                 trg_h.size()[2]
@@ -246,7 +247,7 @@ class Attention(Seq2Seq):
             input_trg = next_preds
             if t >= 2:
                 # stop when all finished
-                unfinished = torch.add(torch.mul((input_trg == _EOS).type_as(decoder_logit), -1), 1)
+                unfinished = torch.add(torch.mul((input_trg == EOS).type_as(decoder_logit), -1), 1)
                 if unfinished.sum().data[0] == 0:
                     break
 

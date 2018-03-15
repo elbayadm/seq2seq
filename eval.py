@@ -43,14 +43,13 @@ if __name__ == "__main__":
         import utils
 
         print('Reading data ...')
-        opt.batch_size = 10
         src_loader = textDataLoader({'h5_file': opt.input_data_src+'.h5',
-                                     'infos_file': opt.input_data_src+'.pkl',
+                                     'infos_file': opt.input_data_src+'.infos',
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
 
         trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
-                                     'infos_file': opt.input_data_trg+'.pkl',
+                                     'infos_file': opt.input_data_trg+'.infos',
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
 
@@ -132,7 +131,7 @@ if __name__ == "__main__":
             opt.logger.error('No pre-existing evaluation')
             perf = {}
         trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
-                                     'infos_file': opt.input_data_trg+'.pkl',
+                                     'infos_file': opt.input_data_trg+'.infos',
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
         eval_kwargs = {"split": opt.split,

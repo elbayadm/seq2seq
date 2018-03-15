@@ -14,21 +14,22 @@
 # https://github.com/pytorch/examples/blob/master/OpenNMT/onmt/Beam.py
 
 import torch
-_BOS = 2
-_EOS = 1
+_BOS = 3
+_EOS = 2
+_UNK = 1
 _PAD = 0
 
 
 class Beam(object):
     """Ordered beam of candidate outputs."""
 
-    def __init__(self, size, cuda=False):
+    def __init__(self, size, opt, cuda=True):
         """Initialize params."""
         self.size = size
         self.done = False
-        self.pad = _PAD
-        self.bos = _BOS
-        self.eos = _EOS
+        self.pad = opt.get('PAD', _PAD)
+        self.bos = opt.get('BOS', _BOS)
+        self.eos = opt.get('EOS', _EOS)
         self.tt = torch.cuda if cuda else torch
 
         # The score for each translation on the beam.

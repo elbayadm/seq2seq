@@ -3,9 +3,6 @@ import pickle
 import h5py
 import numpy as np
 
-_EOS = 1
-_BOS = 2
-
 
 class textDataLoader(object):
     """
@@ -15,7 +12,6 @@ class textDataLoader(object):
         self.logger = logger
         infos = pickle.load(open(params['infos_file'], 'rb'))
         self.ix_to_word = infos['itow']
-        # self.ix_to_word[0] = '<PAD>'  # already in
         self.vocab_size = len(self.ix_to_word)
         self.logger.warn('vocab size is %d ' % self.vocab_size)
         # open the hdf5 file
@@ -29,8 +25,21 @@ class textDataLoader(object):
         seq_size = self.h5_file['labels_test'].shape
         self.seq_length = seq_size[1]
         self.logger.warn('max sequence length in data is %d' % self.seq_length)
-        # separate out indexes for each of the provided splits
         self.iterators = {'train': 0, 'val': 0, 'test': 0}
+        word_to_ix = {w: ix for ix, w in self.ix_to_word.items()}
+        self.pad = word_to_ix['<PAD>']
+        self.unk = word_to_ix['<UNK>']
+        try:
+            self.eos = word_to_ix['<EOS>']
+            self.bos = word_to_ix['<BOS>']
+        except:
+            self.eos = self.pad
+            self.bos = self.pad
+        self.logger.debug('Special tokens: PAD (%d), UNK (%d), EOS (%d), BOS (%d)' % (self.pad,
+                                                                                      self.unk,
+                                                                                      self.eos,
+                                                                                      self.bos))
+
 
     def get_vocab_size(self):
         return self.vocab_size
@@ -54,6 +63,7 @@ class textDataLoader(object):
             ri_next = ri + 1
             if ri_next >= max_index:
                 ri_next = 0
+                print('Wrapped source corpus')
                 wrapped = True
             self.iterators[split] = ri_next
             label_batch[i] = self.h5_file[pointer][ri, :self.seq_length]
@@ -82,16 +92,17 @@ class textDataLoader(object):
             ri_next = ri + 1
             if ri_next >= max_index:
                 ri_next = 0
+                print('Wrapped target corpus')
                 wrapped = True
             self.iterators[split] = ri_next
             # add <bos>
-            in_label_batch[i, 0] = _BOS
+            in_label_batch[i, 0] = self.bos
             in_label_batch[i, 1:] = self.h5_file[pointer][ri, :self.seq_length]
             # add <eos>
             line = self.h5_file[pointer][ri, :self.seq_length]
             ll = self.h5_file[len_pointer][ri]
             len_batch.append(ll + 1)
-            out_label_batch[i] = np.insert(line, ll, _EOS)
+            out_label_batch[i] = np.insert(line, ll, self.eos)
             lmask = self.h5_file['mask_%s' % split][ri, :self.seq_length]
             mask_batch[i] = np.insert(lmask, ll, 1)
 

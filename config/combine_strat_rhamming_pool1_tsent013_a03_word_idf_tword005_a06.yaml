@@ -2,12 +2,12 @@ modelname : combine_strat_rhamming_pool1_tsent013_a03_word_idf_tword005_a06
 model: attention
 
 # Data:
-input_data_src: data/WMT14/en_src
-input_data_trg: data/WMT14/fr_trg
+input_data_src: data/WMT14/en_src_cmp
+input_data_trg: data/WMT14/fr_trg_cmp
 
 batch_size: 40
 valid_batch_size: 15
-
+max_epochs : 5
 # Loss:
 loss_version : seq
 reward : hamming
