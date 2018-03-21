@@ -28,7 +28,7 @@ class ImportanceSampler(nn.Module):
     q=p_\theta or hamming
     r = Cider or Bleu
     """
-    def __init__(self, opt, vocab):
+    def __init__(self, opt, loader):
         nn.Module.__init__(self)
         self.logger = opt.logger
         self.penalize_confidence = opt.penalize_confidence
@@ -37,10 +37,11 @@ class ImportanceSampler(nn.Module):
         self.mc_samples = opt.mc_samples
         self.combine_loss = opt.combine_loss
         self.sampler = init_sampler(opt.importance_sampler.lower(),
-                                    opt)
+                                    opt,
+                                    loader)
+        self.vocab = loader.get_vocab()
         self.scorer = init_scorer(opt.reward.lower(),
-                                  opt, vocab)
-        self.vocab = vocab
+                                  opt, self.vocab)
         if self.combine_loss:
             self.loss_sampled = WordSmoothCriterion(opt)
             # self.loss_gt = WordSmoothCriterion(opt)

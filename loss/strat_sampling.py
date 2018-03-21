@@ -16,7 +16,7 @@ class RewardSampler(nn.Module):
     Sampling the sentences wtr the reward distribution
     instead of the captionig model itself
     """
-    def __init__(self, opt, vocab):
+    def __init__(self, opt, loader):
         super(RewardSampler, self).__init__()
         self.logger = opt.logger
         self.penalize_confidence = opt.penalize_confidence
@@ -24,14 +24,14 @@ class RewardSampler(nn.Module):
         # the final loss is (1-alpha) ML + alpha * RewardLoss
         self.alpha = opt.alpha_sent
         self.combine_loss = opt.combine_loss
-        self.vocab = vocab
+        self.vocab = loader.get_vocab()
         self.verbose = opt.verbose
         self.mc_samples = opt.mc_samples
         if self.combine_loss:
             self.loss_sampled = WordSmoothCriterion(opt)
             # self.loss_gt = WordSmoothCriterion(opt)
             self.loss_gt = self.loss_sampled  # for now it's the same
-        self.sampler = init_sampler(opt.reward.lower(), opt)
+        self.sampler = init_sampler(opt.reward.lower(), opt, loader)
 
     def log(self):
         self.logger.info('RewardSampler (stratified sampling), r=%s' % self.sampler.version)

@@ -1,8 +1,8 @@
-import pickle
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+from utils import pl
 from .utils import get_ml_loss, get_indices_vocab, to_contiguous
 
 
@@ -35,12 +35,13 @@ class WordSmoothCriterion(nn.Module):
         self.alpha = opt.alpha_word
         self.tau_word = opt.tau_word
         # Load the similarity matrix:
-        M = pickle.load(open(opt.similarity_matrix, 'rb'), encoding='iso-8859-1')
+        M = pl(opt.similarity_matrix)
         if not self.use_cooc:
             M = M - 1  # = -D_ij
-        if opt.rare_tfidf:
-            IDF = pickle.load(open('data/WMT14/idf_fr.pkl', 'rb'))
-            M -= self.tau_word * opt.rare_tfidf * IDF
+        if opt.promote_rarity:
+            IDF = pl(opt.rarity_matrix)
+            M -= self.tau_word * opt.promote_rarity * IDF
+            del IDF
         M = M.astype(np.float32)
         n, d = M.shape
         print('Sim matrix:', n, 'x', d, ' V=', opt.vocab_size)
@@ -48,6 +49,7 @@ class WordSmoothCriterion(nn.Module):
         self.vocab_size = opt.vocab_size
         M = Variable(torch.from_numpy(M)).cuda()
         self.Sim_Matrix = M
+        del M
 
     def log(self):
         self.logger.info("Initialized Word2 loss tau=%.3f, alpha=%.1f" % (self.tau_word, self.alpha))
@@ -80,6 +82,7 @@ class WordSmoothCriterion(nn.Module):
         else:
             # Do not exponentiate
             smooth_target = sim
+        del sim
         # Normalize the word reward distribution:
         smooth_target = normalize_reward(smooth_target)
 
@@ -91,7 +94,8 @@ class WordSmoothCriterion(nn.Module):
 
         # Format
         mask = to_contiguous(mask).view(-1, 1)
-        output = - logp * mask.repeat(1, sim.size(1)) * smooth_target
+        output = - logp * mask.repeat(1, smooth_target.size(1)) * smooth_target
+        del smooth_target
 
         if self.normalize_batch:
             if torch.sum(mask).data[0] > 0:

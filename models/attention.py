@@ -28,13 +28,14 @@ class Attention(Seq2Seq):
             self.nlayers_src,
             bidirectional=self.bidirectional,
             batch_first=True,
-            dropout=self.dropout
+            dropout=self.encoder_dropout
         )
 
         self.decoder = LSTMAttentionDot(
             self.trg_emb_dim,
             self.trg_hidden_dim,
-            batch_first=True
+            batch_first=True,
+            dropout=self.attention_dropout
         )
 
         self.init_weights()
@@ -48,7 +49,7 @@ class Attention(Seq2Seq):
         FIXME: works only with LSTM
         TODO : rewrite to include the option of GRU or other type of cells
         """
-        src_emb = self.src_embedding(input_src)
+        src_emb = self.input_encoder_dropout(self.src_embedding(input_src))
         # order = np.argsort(src_lengths)
         src_emb = pack_padded_sequence(src_emb,
                                        src_lengths,
@@ -66,14 +67,14 @@ class Attention(Seq2Seq):
         else:
             h_t = src_h_t[-1]
             c_t = src_c_t[-1]
-        h_t = nn.Tanh()(self.encoder2decoder(h_t))  # FIXME should i drop it
+        h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))  # FIXME check if tanh is the best choice
         return src_h, (h_t, c_t)
 
 
     def forward_decoder(self, decoder_init_state,
                         src_h, c_t, input_trg, trg_lengths,
                         ctx_mask=None):
-        trg_emb = self.trg_embedding(input_trg)
+        trg_emb = self.input_decoder_dropout(self.trg_embedding(input_trg))
         # trg_emb = pack_padded_sequence(trg_emb,
                                        # trg_lengths,
                                        # batch_first=True)
@@ -91,7 +92,7 @@ class Attention(Seq2Seq):
             trg_h.size()[0] * trg_h.size()[1],
             trg_h.size()[2]
         )
-        decoder_logit = F.log_softmax(self.decoder2vocab(trg_h_reshape))
+        decoder_logit = F.log_softmax(self.decoder2vocab(self.decoder_dropout(trg_h_reshape)))
         decoder_logit = decoder_logit.view(
             trg_h.size()[0],
             trg_h.size()[1],

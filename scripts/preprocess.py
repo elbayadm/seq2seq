@@ -3,6 +3,7 @@ import os.path as osp
 import argparse
 import h5py
 import numpy as np
+import progressbar
 
 sys.path.insert(0, '.')
 from utils import pd
@@ -68,6 +69,7 @@ def encode_sentences(sentences, params, wtoi):
     encode all sentences into one large array, which will be 1-indexed.
     No special tokens are added, except from the <pad> after the effective length
     """
+    bar = progressbar.ProgressBar(max_value=len(sentences))
     max_length = params.max_length
     lengths = []
     m = len(sentences)
@@ -79,8 +81,7 @@ def encode_sentences(sentences, params, wtoi):
             if k < max_length:
                 IL[i, k] = wtoi[w] if w in wtoi else wtoi['<UNK>']
                 M[i, k] = int(w in wtoi)
-        if not i % 1000:
-            print('%.2f%%' % (i / len(sentences) * 100))
+        bar.update(i)
     assert np.all(np.array(lengths) > 0), 'error: some line has no words'
     return IL, M, lengths
 
@@ -105,12 +106,16 @@ def main_trg(params):
         for line in open(vocab_file, 'r'):
             vocab.append(line.strip())
         if '<BOS>' not in vocab:
+            print('Inserting BOS')
             vocab.insert(0, "<BOS>")
         if '<EOS>' not in vocab:
+            print('Inserting EOS')
             vocab.insert(0, "<EOS>")
         if '<UNK>' not in vocab:
+            print('Inserting UNK')
             vocab.insert(0, "<UNK>")
         if '<PAD>' not in vocab:
+            print('Inserting PAD')
             vocab.insert(0, "<PAD>")
     else:
         # create the vocab

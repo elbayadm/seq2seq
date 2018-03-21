@@ -45,11 +45,13 @@ if __name__ == "__main__":
         print('Reading data ...')
         src_loader = textDataLoader({'h5_file': opt.input_data_src+'.h5',
                                      'infos_file': opt.input_data_src+'.infos',
+                                     'max_seq_length': opt.max_src_length,
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
 
         trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
                                      'infos_file': opt.input_data_trg+'.infos',
+                                     'max_seq_length': opt.max_trg_length,
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
 
@@ -75,6 +77,13 @@ if __name__ == "__main__":
         with open(opt.infos_start_from, 'rb') as f:
             print('Opening %s' % opt.infos_start_from)
             infos = pickle.load(f, encoding="iso-8859-1")
+            # update special tokens (especially for old models trained with a different vocab)
+            # trg_vocab = {w: k for k, w in infos['trg_vocab'].items()}
+            # trg_loader.eos = trg_vocab['<EOS>']
+            # trg_loader.bos = trg_vocab['<BOS>']
+            # trg_loader.unk = trg_vocab['<UNK>']
+            # trg_loader.pad = trg_vocab['<PAD>']
+
             infos['opt'].logger = None
         ignore = ["batch_size", "beam_size", "start_from",
                   'infos_start_from', "split",
@@ -92,7 +101,7 @@ if __name__ == "__main__":
         opt.logger.warn('Transferring to cuda...')
         model.cuda()
         opt.logger.info('Setting up the loss function %s' % opt.loss_version)
-        model.define_loss(trg_loader.get_vocab())
+        model.define_loss(trg_loader)
         opt.logger.warn('Evaluating the model')
         model.eval()
         eval_kwargs = {"beam_size": 1,
@@ -121,6 +130,7 @@ if __name__ == "__main__":
             # json.dump(preds, open(opt.output + '.json', 'w'))
 
     else:
+        # ----------- Score pre-existing predictions.
         from models.evaluate import score_trads
         from loader import textDataLoader
         opt.logger.warn('Evaluating already generated caps')
@@ -132,6 +142,7 @@ if __name__ == "__main__":
             perf = {}
         trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
                                      'infos_file': opt.input_data_trg+'.infos',
+                                     'max_seq_length': opt.max_trg_length,
                                      'batch_size': opt.batch_size},
                                     logger=opt.logger)
         eval_kwargs = {"split": opt.split,

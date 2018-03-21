@@ -1,0 +1,15 @@
+modelname:  word_tword02_a05_wmt14
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+similarity_matrix : data/WMT14/glove_w15d300.sim
+restart : 1
+
+# batch_size: 10
+# valid_batch_size: 20
+
+# Loss
+loss_version: word
+alpha_word : 0.5
+tau_word: 0.2

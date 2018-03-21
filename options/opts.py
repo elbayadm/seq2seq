@@ -94,8 +94,11 @@ def add_loss_params(parser):
                default=0, help='whether or not to restrain to a subset of similarities\
                0 : the full vocabulary,\
                1 : the 5 captions vocabulary')
-    parser.add('--rare_tfidf', type=float,
+    parser.add('--promote_rarity', type=float,
                default=0, help='increase the similarity of rare words')
+    parser.add('--rarity_matrix', type=str,
+               default='data/IWSLT14/promote_rare.matrix',
+               help='path to the pre-computed similarity matrix between the vocab words')
     parser.add('--alpha_word', type=float,
                default=0.9, help='Scalar used to weigh the word loss\
                the final loss = alpha * word + (1-alpha) ml')
@@ -176,7 +179,6 @@ def add_generic_params(parser):
     # Gpu id if required (LIG servers)
     parser.add('--gpu_id', type=int,
                default=0)
-
     # Data parameters:
     parser.add('--seq_per_img', type=int, default=1)  # irrelevant here
     parser.add('--max_src_length', type=int, default=50)
@@ -198,7 +200,6 @@ def add_generic_params(parser):
                default=2000, help='size of the rnn in number of hidden nodes in each layer')
     parser.add('--rnn_type_src', type=str,
                default='lstm', help='rnn, gru, or lstm')
-
     parser.add('--rnn_size_trg', type=int,
                default=2000, help='size of the rnn in number of hidden nodes in each layer')
     parser.add('--rnn_type_trg', type=str,
@@ -211,8 +212,21 @@ def add_generic_params(parser):
                default=620, help='the encoding size of each token in the vocabulary, and the image.')
     parser.add('--dim_word_trg', type=int,
                default=620, help='the encoding size of each token in the vocabulary, and the image.')
-    parser.add('--use_dropout', type=float,
+    parser.add('--input_encoder_dropout', type=float,
                default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--encoder_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--enc2dec_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--decoder_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--input_decoder_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--attention_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--scale_grad_by_freq', type=int,
+               default=0, help='scale gradient of the embedding layers by the word frequency in the minibatch')
+
     return parser
 
 

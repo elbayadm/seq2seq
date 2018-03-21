@@ -11,7 +11,7 @@ from prettytable import PrettyTable
 from html import escape
 from parse import *
 
-FIELDS = ['Loss', 'Reward', 'Vsub', 'Beam', 'Bleu', 'Perplexity', 'best/last']
+FIELDS = ["Corpus", 'Loss', 'Reward', 'Vsub', 'Beam', 'Bleu', 'Perplexity', 'best/last']
 PAPER_FIELDS = ['Loss', 'Reward', 'Vsub', 'Beam', 'Bleu', 'Perplexity']
 PAPER_FIELDS_SELECT = PAPER_FIELDS
 
@@ -138,7 +138,7 @@ def crawl_results_paper(fltr=[], exclude=[], split="test", verbose=False, beam=-
                 print(model.split('/')[-1])
             for params, res in outputs:
                 # params, res = outputs[0]
-                loss, reward, vsub = parse_name_short(params, verbose)
+                data, loss, reward, vsub = parse_name_short(params, verbose)
                 perf = get_perf(res)
                 if beam != -1:
                     if params['beam_size'] == beam:
@@ -154,8 +154,8 @@ def crawl_results_paper(fltr=[], exclude=[], split="test", verbose=False, beam=-
     return tab
 
 
-def crawl_results(fltr='', exclude=None, split="val", save_pkl=False, verbose=False):
-    models = glob.glob('save/*')
+def crawl_results(fltr='', exclude=None, split="val", dir="", save_pkl=False, verbose=False):
+    models = glob.glob('save/%s*' % dir)
     models = [model for model in models if is_required(model, fltr, exclude)]
     recap = {}
     tab = PrettyTable()
@@ -170,7 +170,7 @@ def crawl_results(fltr='', exclude=None, split="val", save_pkl=False, verbose=Fa
             if save_pkl:
                 dump.append(outputs)
             for (p, res) in outputs:
-                loss, reward, vsub = parse_name_short(p, verbose)
+                corpus, loss, reward, vsub = parse_name_short(p, verbose)
                 bleu = float(res['Bleu'])
                 try:
                     recap[p['alpha']] = bleu
@@ -181,7 +181,7 @@ def crawl_results(fltr='', exclude=None, split="val", save_pkl=False, verbose=Fa
                     perpl = float(exp(res['ml_loss']))
                 except:
                     perpl = 1.
-                row = [loss, reward, vsub,
+                row = [corpus, loss, reward, vsub,
                        p['beam_size'],
                        bleu, perpl, res['best/last']]
                 tab.add_row(row)
@@ -197,6 +197,7 @@ if __name__ == "__main__":
     parser.add_argument('--html', action='store_true', help="save results into html")
     parser.add_argument('--pkl', action='store_true', help="save results into pkl")
     parser.add_argument('--split', type=str, default="val", help="split on which to report")
+    parser.add_argument('--dir', type=str, default="", help="directory of results")
     parser.add_argument('--sort', type=str, default="Bleu", help="criteria by which to order the terminal printed table")
     parser.add_argument('--verbose', '-v', action="store_true", help="script verbosity")
     parser.add_argument('--beam', '-b', type=int, default=5, help="beam reported")
@@ -231,7 +232,7 @@ if __name__ == "__main__":
                             reversesort=False, fields=PAPER_FIELDS_SELECT)
             f.write("\n".join(tex))
     else:
-        tab, dump = crawl_results(fltr, exc, split,
+        tab, dump = crawl_results(fltr, exc, split, args.dir,
                                   args.pkl, verbose)
         print(tab.get_string(sortby='Bleu', reversesort=True))
         filename = "results/%s%s_%s" % (split, fltr_concat, socket.gethostname())

@@ -304,13 +304,14 @@ class SoftDotAttention(nn.Module):
     Adapted from PyTorch OPEN NMT.
     """
 
-    def __init__(self, dim):
+    def __init__(self, dim, attn_dropout):
         """Initialize layer."""
         super(SoftDotAttention, self).__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)
         self.sm = nn.Softmax()
         self.linear_out = nn.Linear(dim * 2, dim, bias=False)
         self.tanh = nn.Tanh()
+        self.dropout = nn.Dropout(attn_dropout)
         self.mask = None
 
     def forward(self, input, context):
@@ -323,7 +324,7 @@ class SoftDotAttention(nn.Module):
 
         # Get attention
         attn = torch.bmm(context, target).squeeze(2)  # batch x sourceL
-        attn = self.sm(attn)
+        attn = self.sm(self.dropout(attn))
         attn3 = attn.view(attn.size(0), 1, attn.size(1))  # batch x 1 x sourceL
 
         weighted_context = torch.bmm(attn3, context).squeeze(1)  # batch x dim
@@ -339,7 +340,7 @@ class LSTMAttentionDot(nn.Module):
     A long short-term memory (LSTM) cell with attention.
     """
 
-    def __init__(self, input_size, hidden_size, batch_first=True):
+    def __init__(self, input_size, hidden_size, batch_first=True, dropout=0):
         """Initialize params."""
         super(LSTMAttentionDot, self).__init__()
         self.input_size = input_size
@@ -350,7 +351,7 @@ class LSTMAttentionDot(nn.Module):
         self.input_weights = nn.Linear(input_size, 4 * hidden_size)
         self.hidden_weights = nn.Linear(hidden_size, 4 * hidden_size)
 
-        self.attention_layer = SoftDotAttention(hidden_size)
+        self.attention_layer = SoftDotAttention(hidden_size, dropout)
 
     def forward(self, input, hidden, ctx, ctx_mask=None):
         """Propogate input through the network."""

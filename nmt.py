@@ -5,6 +5,7 @@ Main training loop
 
 import sys
 import os
+import gc
 import time
 import random
 import numpy as np
@@ -43,11 +44,13 @@ def train(opt):
     opt.logger.info('Reading data ...')
     src_loader = textDataLoader({'h5_file': opt.input_data_src+'.h5',
                                  'infos_file': opt.input_data_src+'.infos',
+                                 "max_seq_length": opt.max_src_length,
                                  'batch_size': opt.batch_size},
                                 logger=opt.logger)
 
     trg_loader = textDataLoader({'h5_file': opt.input_data_trg+'.h5',
                                  'infos_file': opt.input_data_trg+'.infos',
+                                 "max_seq_length": opt.max_trg_length,
                                  'batch_size': opt.batch_size},
                                 logger=opt.logger)
 
@@ -58,22 +61,24 @@ def train(opt):
     iteration, epoch, opt, infos, history = ms.recover_infos(opt)
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
-    iteration -= 1  # start with an evaluation
+    # iteration -= 1  # start with an evaluation
     opt.logger.info('Starting from Epoch %d, iteration %d' % (epoch, iteration))
     # Recover data iterator and best perf
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
     if opt.load_best_score == 1:
         best_val_score = infos.get('best_val_score', None)
+    del infos
     model = ms.select_model(opt, src_vocab_size, trg_vocab_size)
     opt.logger.warn('Loading pretrained weights...  (batch size: %d)' % opt.batch_size)
     model.load()
     opt.logger.warn('Transferring to cuda...')
     model.cuda()
-    model.define_loss(trg_loader.get_vocab())
+    model.define_loss(trg_loader)
     val_losses = []
     update_lr_flag = True
     optimizer = ms.set_optimizer(opt, epoch, model)
+    gc.collect()
     while True:
         if update_lr_flag:
             # Assign the learning rate
@@ -188,6 +193,7 @@ def train(opt):
                           best_val_score,
                           history, best_flag)
             model.train()
+        gc.collect()
         # Stop if reaching max epochs
         if epoch >= opt.max_epochs and opt.max_epochs != -1:
             break

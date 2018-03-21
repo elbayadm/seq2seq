@@ -27,7 +27,13 @@ class Seq2Seq(nn.Module):
         self.bidirectional = opt.bidirectional
         self.nlayers_src = opt.num_layers_src
         self.nlayers_trg = opt.num_layers_trg
-        self.dropout = opt.use_dropout
+        self.attention_dropout = opt.attention_dropout
+        # applied on the outputs of each rnn except the last (c.f. nn.LSTM)
+        self.encoder_dropout = opt.encoder_dropout
+        self.input_encoder_dropout = nn.Dropout(opt.input_encoder_dropout)
+        # applied on the encoder code before feeding it to the decoder
+        # applied to the decoder outputs before mapping to the vocab size.
+        self.input_decoder_dropout = nn.Dropout(opt.input_decoder_dropout)
         self.num_directions = 2 if self.bidirectional else 1
         self.pad_token_src = 0
         self.pad_token_trg = 0
@@ -39,21 +45,26 @@ class Seq2Seq(nn.Module):
         self.src_embedding = nn.Embedding(
             self.src_vocab_size,
             self.src_emb_dim,
-            self.pad_token_src
+            self.pad_token_src,
+            scale_grad_by_freq=bool(opt.scale_grad_by_freq)
+
         )
         self.trg_embedding = nn.Embedding(
             self.trg_vocab_size,
             self.trg_emb_dim,
-            self.pad_token_trg
-        )
+            self.pad_token_trg,
+            scale_grad_by_freq=bool(opt.scale_grad_by_freq)
 
+        )
         # print('Enc2Dec dims:', self.src_hidden_dim * self.num_directions, self.trg_hidden_dim)
+        self.enc2dec_dropout = nn.Dropout(opt.enc2dec_dropout)
         self.encoder2decoder = nn.Linear(
             self.src_hidden_dim * self.num_directions,
             self.trg_hidden_dim
         )
         self.decoder2vocab = nn.Linear(self.trg_hidden_dim,
                                        self.trg_vocab_size)
+        self.decoder_dropout = nn.Dropout(opt.decoder_dropout)
 
     def init_weights(self):
         """Initialize weights."""
@@ -93,7 +104,7 @@ class Seq2Seq(nn.Module):
         )
         return word_probs
 
-    def define_loss(self, vocab):
+    def define_loss(self, trg_loader):
         opt = self.opt
         ver = opt.loss_version.lower()
         if ver == 'ml':
@@ -102,9 +113,9 @@ class Seq2Seq(nn.Module):
             crit = loss.WordSmoothCriterion(opt)
         elif ver == "seq":
             if opt.stratify_reward:
-                crit = loss.RewardSampler(opt, vocab)
+                crit = loss.RewardSampler(opt, trg_loader)
             else:
-                crit = loss.ImportanceSampler(opt, vocab)
+                crit = loss.ImportanceSampler(opt, trg_loader)
         else:
             raise ValueError('unknown loss mode %s' % ver)
         crit.log()

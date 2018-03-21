@@ -161,7 +161,7 @@ def parse_name_short(params, verbose=0):
         elif params['loss_version'] == "word":
             loss = 'tok'
             reward = 'Glove sim'
-            if params['rare_tfidf']:
+            if params.get('rare_tfidf', 0) or params.get('promote_rarity', 0):
                 reward += " xIDF"
             vsub = ''
         elif params['loss_version'] == "seq":
@@ -181,7 +181,8 @@ def parse_name_short(params, verbose=0):
             vsub = ""
     if verbose:
         loss = params['modelname']
-    return loss, reward, vsub
+    corpus = params['input_data_src'].split('/')[1]
+    return corpus, loss, reward, vsub
 
 
 

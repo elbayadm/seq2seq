@@ -23,7 +23,8 @@ class textDataLoader(object):
         # load in the sequence data
         self.batch_size = params['batch_size']
         seq_size = self.h5_file['labels_test'].shape
-        self.seq_length = seq_size[1]
+        self.logger.warn('saved sequence length in data is %d' % seq_size[1])
+        self.seq_length = params['max_seq_length']
         self.logger.warn('max sequence length in data is %d' % self.seq_length)
         self.iterators = {'train': 0, 'val': 0, 'test': 0}
         word_to_ix = {w: ix for ix, w in self.ix_to_word.items()}
@@ -100,7 +101,7 @@ class textDataLoader(object):
             in_label_batch[i, 1:] = self.h5_file[pointer][ri, :self.seq_length]
             # add <eos>
             line = self.h5_file[pointer][ri, :self.seq_length]
-            ll = self.h5_file[len_pointer][ri]
+            ll = min(self.seq_length, self.h5_file[len_pointer][ri])
             len_batch.append(ll + 1)
             out_label_batch[i] = np.insert(line, ll, self.eos)
             lmask = self.h5_file['mask_%s' % split][ri, :self.seq_length]

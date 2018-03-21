@@ -1,5 +1,4 @@
-modelname:  baseline_attend
-
+modelname:  baseline_wmt14
 # Data:
 input_data_src: data/WMT14/en_src
 input_data_trg: data/WMT14/fr_trg
@@ -8,7 +7,6 @@ input_data_trg: data/WMT14/fr_trg
 # valid_batch_size: 25
 decode: greedy 
 model: attention
-
 # Loss
 loss_version : ml
 

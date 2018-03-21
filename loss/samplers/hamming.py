@@ -8,7 +8,6 @@ from scipy.misc import comb
 
 import torch
 from torch.autograd import Variable
-from ..utils import _BOS, _EOS
 
 
 def hamming_distrib_soft(m, v, tau):
@@ -38,10 +37,12 @@ class HammingSampler(object):
     """
     Sample a hamming distance and alter the truth
     """
-    def __init__(self, opt):
+    def __init__(self, opt, loader):
         self.limited = opt.limited_vocab_sub
         self.seq_per_img = opt.seq_per_img
         self.vocab_size = opt.vocab_size
+        self.bos = loader.bos
+        self.eos = loader.eos
         if opt.stratify_reward:
             # sampler = r
             self.tau = opt.tau_sent
@@ -51,53 +52,6 @@ class HammingSampler(object):
             self.tau = opt.tau_sent_q
             self.prefix = 'qhamm'
         self.version = 'Hamming (Vpool=%d, tau=%.2f)' % (self.limited, self.tau)
-
-    def sample(self, logp, labels):
-        """
-        Sample ~y given y*
-        return ~y and r(~y|y*)
-        """
-        batch_size = labels.size(0)
-        seq_length = labels.size(1)
-        # get batch vocab size
-        refs = labels.cpu().data.numpy()
-        if self.limited == 1:  # In-batch vocabulary substitution
-            batch_vocab = np.delete(np.unique(refs), 0)
-            lv = len(batch_vocab)
-        elif self.limited == 2:  # In-image vocabulary substitution
-            num_img = batch_size // self.seq_per_img
-            refs_per_image = np.split(refs, num_img)
-            im_vocab = [np.delete(np.unique(chunk), 0) for chunk in refs_per_image]
-            del refs_per_image
-            lv = np.max([len(chunk) for chunk in im_vocab])
-        else:  # Full vocabulary substitution
-            lv = self.vocab_size
-        distrib, Z = hamming_distrib(seq_length, lv, self.tau)
-        # Sample a distance i.e. a reward
-        select = np.random.choice(a=np.arange(seq_length + 1),
-                                  p=distrib)
-        score = math.exp(-select / self.tau) / Z
-        stats = {"%s_mean" % self.prefix: score,
-                 "%s_std" % self.prefix: 0}
-
-        # Format preds by changing d=select tokens at random
-        preds = refs
-        # choose tokens to replace
-        change_index = np.random.randint(seq_length, size=(batch_size, select))
-        rows = np.arange(batch_size).reshape(-1, 1).repeat(select, axis=1)
-        # select substitutes
-        if self.limited == 1:
-            select_index = np.random.choice(batch_vocab, size=(batch_size, select))
-        elif self.limited == 2:
-            select_index = np.vstack([np.random.choice(chunk,
-                                                       size=(self.seq_per_img, select))
-                                      for chunk in im_vocab])
-        else:
-            select_index = np.random.randint(low=4, high=self.vocab_size, size=(batch_size, select))
-        preds[rows, change_index] = select_index
-        preds_matrix = np.hstack((np.zeros((batch_size, 1)), preds))  # padd <BOS>
-        preds_matrix = Variable(torch.from_numpy(preds_matrix)).cuda().type_as(labels)
-        return preds_matrix, np.ones(batch_size) * score, stats
 
     def nmt_sample(self, logp, labels):
         # lables tokens + EOS + padding
@@ -137,10 +91,9 @@ class HammingSampler(object):
         # print("Selected:", select_index)
         preds[rows, change_index] = select_index
         # print('opreds:', preds)
-        # remove EOS to get ipreds:
         ipreds = preds[:, :-1]
-        ipreds[ipreds == _EOS] = 0
-        ipreds_matrix = np.hstack((np.ones((batch_size, 1)) * _BOS, ipreds))  # padd <BOS>
+        ipreds[ipreds == self.eos] = 0  # sub with PAD
+        ipreds_matrix = np.hstack((np.ones((batch_size, 1)) * self.bos, ipreds))  # padd <BOS>
         # print('ipreds:', ipreds_matrix)
         ipreds_matrix = Variable(torch.from_numpy(ipreds_matrix)).cuda().type_as(labels)
         opreds_matrix = Variable(torch.from_numpy(preds)).cuda().type_as(labels)
