@@ -208,10 +208,14 @@ def add_generic_params(parser):
                default=2, help='number of layers in the RNN')
     parser.add('--num_layers_trg', type=int,
                default=1, help='number of layers in the RNN')
+    parser.add('--tied_decoder', type=int,
+               default=0, help='tie the decoder embedding with its last mapping to the vocab')
     parser.add('--dim_word_src', type=int,
-               default=620, help='the encoding size of each token in the vocabulary, and the image.')
+               default=620,
+               help='the encoding size of each token in the vocabulary, and the image.')
     parser.add('--dim_word_trg', type=int,
-               default=620, help='the encoding size of each token in the vocabulary, and the image.')
+               default=620,
+               help='the encoding size of each token in the vocabulary, and the image.')
     parser.add('--input_encoder_dropout', type=float,
                default=0, help='strength of dropout in the Language Model RNN input')
     parser.add('--encoder_dropout', type=float,

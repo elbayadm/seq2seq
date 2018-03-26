@@ -6,29 +6,22 @@ import os.path as osp
 import torch
 import torch.optim as optim
 
-from .vanilla import Vanilla
-from .attention import Attention
-from .fast_attention import FastAttention
+# from .attention import Attention
+from .nmt import seq2seq
 
 
 def select_model(opt, src_vocab_size, trg_vocab_size):
-    if opt.model == "vanilla":
-        model = Vanilla(opt,
+    if opt.model == 'attention':
+        model = seq2seq(opt,
                         src_vocab_size,
                         trg_vocab_size)
-    elif opt.model == 'attention':
-        model = Attention(opt,
-                          src_vocab_size,
-                          trg_vocab_size)
     elif opt.model == 'fastattention':
-        model = FastAttention(opt,
-                              src_vocab_size,
-                              trg_vocab_size)
+        model = seq2seq(opt,
+                        src_vocab_size,
+                        trg_vocab_size)
     else:
         raise ValueError("Unknown model ", opt.model)
-
     return model
-
 
 
 def recover_ens_infos(opt):

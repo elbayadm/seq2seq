@@ -22,14 +22,12 @@ class Attention(Seq2Seq):
         self.attention_mode = 'dot'
         self.max_trg_length = opt.max_trg_length
 
-        self.encoder = nn.LSTM(
-            self.src_emb_dim,
-            self.src_hidden_dim,
-            self.nlayers_src,
-            bidirectional=self.bidirectional,
-            batch_first=True,
-            dropout=self.encoder_dropout
-        )
+        self.encoder = getattr(nn, opt.rnn_type_src.upper())(self.src_emb_dim,
+                                                             self.src_hidden_dim,
+                                                             self.nlayers_src,
+                                                             bidirectional=self.bidirectional,
+                                                             batch_first=True,
+                                                             dropout=self.encoder_dropout)
 
         self.decoder = LSTMAttentionDot(
             self.trg_emb_dim,
@@ -43,11 +41,8 @@ class Attention(Seq2Seq):
     def get_decoder_init_state(self, input_src, src_lengths):
         """
         Returns:
-            src_h : the source code
-            h_t: mapping of the source code src_h_t=T
-            c_t : the source final context src_c_t=T
-        FIXME: works only with LSTM
-        TODO : rewrite to include the option of GRU or other type of cells
+            src_code : the source code
+            state_decoder: mapping of the source's last state
         """
         src_emb = self.input_encoder_dropout(self.src_embedding(input_src))
         # order = np.argsort(src_lengths)
@@ -55,20 +50,34 @@ class Attention(Seq2Seq):
                                        src_lengths,
                                        batch_first=True)
 
-        h0_encoder, c0_encoder = self.get_init_state(input_src)
-        src_h, (src_h_t, src_c_t) = self.encoder(
-            src_emb, (h0_encoder, c0_encoder)
-        )
-        src_h, _ = pad_packed_sequence(src_h)
-
+        state_encoder = self.get_init_state(input_src)
+        # h0_encoder, c0_encoder = self.get_init_state(input_src)
+        # src_code, (src_h_t, src_c_t) = self.encoder(src_emb, state_encoder)
+        src_code, state_encoder = self.encoder(src_emb, state_encoder)
+        src_code, _ = pad_packed_sequence(src_code) # restore
         if self.bidirectional:
-            h_t = torch.cat((src_h_t[-1], src_h_t[-2]), 1)
-            c_t = torch.cat((src_c_t[-1], src_c_t[-2]), 1)
+            if self.encoder.rnn_type == "lstm":
+                h_t = torch.cat((state_encoder[0][-1],
+                                 state_encoder[0][-2]), 1)
+                c_t = torch.cat((state_encoder[1][-1],
+                                 state_encoder[1][-2]), 1)
+                state_decoder = (h_t, c_t)
+
+            elif self.encoder.rnn_type == 'gru':
+                h_t = torch.cat((state_encoder[-1],
+                                 state_encoder[-2]), 1)
+                state_decoder = h_t
+
         else:
-            h_t = src_h_t[-1]
-            c_t = src_c_t[-1]
-        h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))  # FIXME check if tanh is the best choice
-        return src_h, (h_t, c_t)
+            if self.encoder.rnn_type == "lstm":
+                h_t = state_encoder[0][-1]
+                c_t = state_encoder[1][-1]
+            elif self.encoder.rnn_type == 'gru':
+                h_t = state_encoder[-1]
+
+        h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))
+        # FIXME check if tanh is the best choice
+        return src_code, (h_t, c_t)
 
 
     def forward_decoder(self, decoder_init_state,

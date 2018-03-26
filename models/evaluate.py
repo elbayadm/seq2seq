@@ -11,7 +11,7 @@ import torch
 from torch.autograd import Variable
 from utils import decode_sequence
 import utils.logging as lg
-
+from .search import beam_search
 
 # ESKE
 def corpus_bleu(hypotheses, references, smoothing=False, order=4, **kwargs):
@@ -165,6 +165,98 @@ def model_perplexity(model, src_loader, trg_loader, split="val", logger=None):
 
 
 def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
+    """Evaluate model."""
+    batch_size = eval_kwargs.get('batch_size', 1)
+    verbose = eval_kwargs.get('verbose', 0)
+    split = eval_kwargs.get('split', 'val')
+    model.eval()
+    src_loader.reset_iterator(split)
+    trg_loader.reset_iterator(split)
+
+    ground_truths = []
+    n = 0
+    loss_sum = 0
+    ml_loss_sum = 0
+    loss_evals = 0
+    while True:
+        # get batch
+        data_src, order = src_loader.get_src_batch(split, batch_size)
+        tmp = [data_src['labels']]
+        input_lines_src, = [Variable(torch.from_numpy(_),
+                                    requires_grad=False).cuda()
+                           for _ in tmp]
+        src_lengths = data_src['lengths']
+        data_trg = trg_loader.get_trg_batch(split, order, batch_size)
+        tmp = [data_trg['labels'], data_trg['out_labels'], data_trg['mask']]
+        input_lines_trg_gold, output_lines_trg_gold, mask = [Variable(torch.from_numpy(_),
+                                                                      requires_grad=False).cuda()
+                                                             for _ in tmp]
+        trg_lengths = data_trg['lengths']
+        n += batch_size
+
+        # decoder_logit = model(input_lines_src, input_lines_trg_gold)
+        # if model.opt.sample_reward:
+            # ml_loss, loss, stats = model.crit(model, input_lines_src, input_lines_trg_gold,
+                                              # output_lines_trg_gold, mask)
+        # else:
+            # ml_loss, loss, stats = model.crit(decoder_logit, output_lines_trg_gold, mask)
+
+        ml_loss, loss, _ = model.step(input_lines_src, src_lengths,
+                                      input_lines_trg_gold, trg_lengths,
+                                      output_lines_trg_gold,
+                                      mask)
+        loss_sum += loss.data[0]
+        ml_loss_sum += ml_loss.data[0]
+        loss_evals = loss_evals + 1
+        # Initialize target with <BOS> for every sentence Index = 2
+        # print('Sampling sentence')
+        # print('GPU:', os.environ['CUDA_VISIBLE_DEVICES'])
+        start = time.time()
+        batch_preds = beam_search(model, input_lines_src, src_lengths,
+                                  trg_loader, eval_kwargs,
+                                  avoid_double=False, avoid_unk=False)
+        if isinstance(batch_preds, list):
+            # wiht beam size unpadded preds
+            sent_preds = [decode_sequence(trg_loader.get_vocab(),
+                                          np.array(pred).reshape(1, -1),
+                                          eos=trg_loader.eos,
+                                          bos=trg_loader.bos)[0]
+                          for pred in batch_preds]
+        else:
+            # decode
+            sent_preds = decode_sequence(trg_loader.get_vocab(), batch_preds,
+                                         eos=trg_loader.eos,
+                                         bos=trg_loader.bos)
+        # Do the same for gold sentences
+        sent_source = decode_sequence(src_loader.get_vocab(),
+                                      input_lines_src.data.cpu().numpy(),
+                                      eos=src_loader.eos, bos=src_loader.bos)
+        sent_gold = decode_sequence(trg_loader.get_vocab(),
+                                    output_lines_trg_gold.data.cpu().numpy(),
+                                    eos=trg_loader.eos,
+                                    bos=trg_loader.bos)
+        if not verbose:
+            verb = not (n % 300)
+        else:
+            verb = verbose
+        for (sl, l, gl) in zip(sent_source, sent_preds, sent_gold):
+            preds.append(l)
+            ground_truths.append(gl)
+            if verb:
+                lg.print_sampled(sl, gl, l)
+        ix1 = data_src['bounds']['it_max']
+        if data_src['bounds']['wrapped']:
+            break
+        if n >= ix1:
+            logger.warn('Evaluated the required samples (%s)' % n)
+            break
+    # print('Predictions lenght:', len(preds), len(ground_truths))
+    # assert(len(preds) == trg_loader.h5_file['labels_val'].shape[0])
+    bleu_moses, _ = corpus_bleu(preds, ground_truths)
+    return preds, ml_loss_sum / loss_evals, loss_sum / loss_evals, bleu_moses
+
+
+def evaluate_model_old(model, src_loader, trg_loader, logger, eval_kwargs):
     """Evaluate model."""
     preds = []
     ground_truths = []
