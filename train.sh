@@ -42,7 +42,7 @@ if [ $BQ ]; then
            -t besteffort -t idempotent \
            -p $oarprop \
            -O  save/$JOB/stdout -E save/$JOB/stderr\
-           'python nmt.py -c config/'$JOB'.yaml'"
+           'source activate safe && python nmt.py -c config/'$JOB'.yaml'"
     echo 'Running' $cmd
     eval $cmd
 else
@@ -50,7 +50,7 @@ else
     cmd="oarsub -l \"walltime=100:0:0\" -n $JOB \
             -O  save/$JOB/stdout -E save/$JOB/stderr\
             -p $oarprop\
-            'python nmt.py -c config/'$JOB'.yaml'"
+            'source activate safe && python nmt.py -c config/'$JOB'.yaml'"
     eval $cmd
 fi
 
