@@ -174,8 +174,8 @@ class Seq2Seq(nn.Module):
         opt = self.opt
         if opt.loss_version.lower() == "seq":
             # Avoid re-encoding the sources when sampling other targets
-            src_h, (h_t, c_t) = self.get_decoder_init_state(input_lines_src, src_lengths)
-            ml_loss, reward_loss, stats = self.crit(self, h_t, src_h, c_t,
+            src_code, state = self.get_decoder_init_state(input_lines_src, src_lengths)
+            ml_loss, reward_loss, stats = self.crit(self, src_code, state,
                                                     input_lines_trg,
                                                     trg_lengths,
                                                     output_lines_trg,

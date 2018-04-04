@@ -21,15 +21,13 @@ class Attention(Seq2Seq):
         super(Attention, self).__init__(opt, src_vocab_size, trg_vocab_size)
         self.attention_mode = 'dot'
         self.max_trg_length = opt.max_trg_length
-
-        self.encoder = nn.LSTM(
-            self.src_emb_dim,
-            self.src_hidden_dim,
-            self.nlayers_src,
-            bidirectional=self.bidirectional,
-            batch_first=True,
-            dropout=self.encoder_dropout
-        )
+        self.rnn_type_src = opt.rnn_type_src.upper()
+        self.encoder = getattr(nn, self.rnn_type_src)(self.src_emb_dim,
+                                                      self.src_hidden_dim,
+                                                      self.nlayers_src,
+                                                      bidirectional=self.bidirectional,
+                                                      batch_first=True,
+                                                      dropout=self.encoder_dropout)
 
         self.decoder = LSTMAttentionDot(
             self.trg_emb_dim,
@@ -43,11 +41,8 @@ class Attention(Seq2Seq):
     def get_decoder_init_state(self, input_src, src_lengths):
         """
         Returns:
-            src_h : the source code
-            h_t: mapping of the source code src_h_t=T
-            c_t : the source final context src_c_t=T
-        FIXME: works only with LSTM
-        TODO : rewrite to include the option of GRU or other type of cells
+            src_code : the source code
+            state_decoder: mapping of the source's last state
         """
         src_emb = self.input_encoder_dropout(self.src_embedding(input_src))
         # order = np.argsort(src_lengths)
@@ -55,35 +50,49 @@ class Attention(Seq2Seq):
                                        src_lengths,
                                        batch_first=True)
 
-        h0_encoder, c0_encoder = self.get_init_state(input_src)
-        src_h, (src_h_t, src_c_t) = self.encoder(
-            src_emb, (h0_encoder, c0_encoder)
-        )
-        src_h, _ = pad_packed_sequence(src_h)
-
+        state_encoder = self.get_init_state(input_src)
+        # h0_encoder, c0_encoder = self.get_init_state(input_src)
+        # src_code, (src_h_t, src_c_t) = self.encoder(src_emb, state_encoder)
+        src_code, state_encoder = self.encoder(src_emb, state_encoder)
+        src_code, _ = pad_packed_sequence(src_code)  # restore
         if self.bidirectional:
-            h_t = torch.cat((src_h_t[-1], src_h_t[-2]), 1)
-            c_t = torch.cat((src_c_t[-1], src_c_t[-2]), 1)
+            if self.rnn_type_src == "LSTM":
+                h_t = torch.cat((state_encoder[0][-1],
+                                 state_encoder[0][-2]), 1)
+                c_t = torch.cat((state_encoder[1][-1],
+                                 state_encoder[1][-2]), 1)
+                state_decoder = (h_t, c_t)
+
+            elif self.rnn_type_src == "GRU":
+                h_t = torch.cat((state_encoder[-1],
+                                 state_encoder[-2]), 1)
+                state_decoder = (h_t)
+
         else:
-            h_t = src_h_t[-1]
-            c_t = src_c_t[-1]
-        h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))  # FIXME check if tanh is the best choice
-        return src_h, (h_t, c_t)
+            if self.rnn_type_src == "LSTM":
+                h_t = state_encoder[0][-1]
+                c_t = state_encoder[1][-1]
+            elif self.rnn_type_src == "GRU":
+                h_t = state_encoder[0][-1]
 
+        h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))
+        state = (h_t)
+        if self.rnn_type_src == "LSTM":
+            state.append(c_t)
+        # FIXME check if tanh is the best choice
+        return src_code, state
 
-    def forward_decoder(self, decoder_init_state,
-                        src_h, c_t, input_trg, trg_lengths,
+    def forward_decoder(self, src_h, state,
+                        input_trg, trg_lengths,
                         ctx_mask=None):
         trg_emb = self.input_decoder_dropout(self.trg_embedding(input_trg))
         # trg_emb = pack_padded_sequence(trg_emb,
                                        # trg_lengths,
                                        # batch_first=True)
-
-
         ctx = src_h
         trg_h, (_, _) = self.decoder(
             trg_emb,
-            (decoder_init_state, c_t),
+            state,
             ctx,
             ctx_mask
         )
@@ -102,9 +111,8 @@ class Attention(Seq2Seq):
 
     def forward(self, input_src, src_lengths, input_trg, trg_lengths, trg_mask=None, ctx_mask=None):
         """Propogate input through the network."""
-        src_h, (h_t, c_t) = self.get_decoder_init_state(input_src, src_lengths)
-        decoder_logit = self.forward_decoder(h_t,
-                                             src_h, c_t,
+        src_code, state = self.get_decoder_init_state(input_src, src_lengths)
+        decoder_logit = self.forward_decoder(src_code, state,
                                              input_trg,
                                              trg_lengths,
                                              ctx_mask)
@@ -114,8 +122,8 @@ class Attention(Seq2Seq):
         beam_size = opt.get('beam_size', 3)
         batch_size = input_src.size(0)
         # encode the source
-        src_h, (h_0, c_0) = self.get_decoder_init_state(input_src, src_lengths)
-        ctx = src_h
+        src_code, state = self.get_decoder_init_state(input_src, src_lengths)
+        ctx = src_code
         batch_size = ctx.size(1)
         # Expand tensors for each beam.
         context = Variable(ctx.data.repeat(1, beam_size, 1))
@@ -133,14 +141,14 @@ class Attention(Seq2Seq):
 
             # check if I shoul add _BOS
             trg_emb = self.trg_embedding(Variable(input).transpose(1, 0))
-            trg_h, (trg_h_t, trg_c_t) = self.decoder(trg_emb,
-                                                     (dec_states[0].squeeze(0),
-                                                      dec_states[1].squeeze(0)),
-                                                     context)
+            trg_h, trg_state = self.decoder(trg_emb,
+                                            (dec_states[0].squeeze(0), dec_states[1].squeeze(0)),
+                                            context)
 
-            dec_states = (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
+            dec_states = (_.unsqueeze(0) for _ in trg_state)
+            # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
 
-            dec_out = trg_h_t.squeeze(1)
+            dec_out = dec_states[0].squeeze(1)
             out = F.softmax(self.decoder2vocab(dec_out)).unsqueeze(0)
 
             word_lk = out.view(beam_size,
@@ -218,17 +226,16 @@ class Attention(Seq2Seq):
         EOS = opt.get('EOS', _EOS)
 
         seq = []
-        src_h, (h_0, c_0) = self.get_decoder_init_state(input_src, src_lengths)
+        src_h, state_0 = self.get_decoder_init_state(input_src, src_lengths)
         ctx = src_h
         for t in range(self.opt.max_trg_length):
             if t == 0:
                 input_trg = Variable(torch.LongTensor([[BOS] for i in range(batch_size)])).cuda()
-                h_t = h_0
-                c_t = c_0
+                state = state_0
             trg_emb = self.trg_embedding(input_trg)
-            trg_h, (h_t, c_t) = self.decoder(
+            trg_h, state = self.decoder(
                 trg_emb,
-                (h_t, c_t),
+                state,
                 ctx,
                 ctx_mask
             )

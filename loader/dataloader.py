@@ -68,11 +68,13 @@ class textDataLoader(object):
                 wrapped = True
             self.iterators[split] = ri_next
             label_batch[i] = self.h5_file[pointer][ri, :self.seq_length]
-            len_batch.append(self.h5_file[len_pointer][ri])
+            len_batch.append(min(self.h5_file[len_pointer][ri],
+                                 self.seq_length))
+
 
         order = sorted(range(batch_size), key=lambda k: -len_batch[k])
         data = {}
-        data['labels'] = label_batch[order]
+        data['labels'] = label_batch[order, :max(len_batch)]
         data['lengths'] = [len_batch[k] for k in order]
         data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': max_index, 'wrapped': wrapped}
         return data, order

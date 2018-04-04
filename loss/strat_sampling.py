@@ -42,7 +42,7 @@ class RewardSampler(nn.Module):
             self.loss_sampled.log()
 
     def forward(self, model,
-                h_t, src_h, c_t,
+                src_code, state,
                 input_lines_trg,
                 trg_lengths,
                 output_lines_trg,
@@ -50,8 +50,7 @@ class RewardSampler(nn.Module):
 
         ilabels = input_lines_trg
         olabels = output_lines_trg
-        logp = model.forward_decoder(h_t,
-                                     src_h, c_t,
+        logp = model.forward_decoder(src_code, state,
                                      ilabels,
                                      trg_lengths)
 
@@ -81,7 +80,7 @@ class RewardSampler(nn.Module):
             else:
                 # Forward the sampled sentences properly
                 mc_output, stats_sampled = self.batch_loss(model,
-                                                           h_t, src_h, c_t,
+                                                           src_code, state,
                                                            ipreds_matrix,
                                                            trg_lengths,
                                                            opreds_matrix,
@@ -94,13 +93,13 @@ class RewardSampler(nn.Module):
         return loss_gt, output, stats
 
     def batch_loss(self, model,
-                   h_t, src_h, c_t,
+                   src_code, state,
                    ipreds_matrix, trg_lengths,
                    opreds_matrix, mask, scores):
         """
         forward the new sampled labels and return the loss
         """
-        logp = model.forward_decoder(h_t, src_h, c_t,
+        logp = model.forward_decoder(src_code, state,
                                      ipreds_matrix,
                                      trg_lengths)
         if self.combine_loss:
