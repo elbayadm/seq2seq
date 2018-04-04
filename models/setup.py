@@ -1,11 +1,11 @@
 from shutil import copy2
 import glob
-from six.moves import cPickle as pickle
 import os.path as osp
 
 import torch
 import torch.optim as optim
 
+from utils import pl
 from .vanilla import Vanilla
 from .attention import Attention
 from .fast_attention import FastAttention
@@ -34,14 +34,14 @@ def select_model(opt, src_vocab_size, trg_vocab_size):
 def recover_ens_infos(opt):
     infos = {}
     # Restart training (useful with oar idempotant)
-    if opt.restart and osp.exists(osp.join(opt.ensemblename, 'model_0.pth')): # Fix the saving names
+    if opt.restart and osp.exists(osp.join(opt.ensemblename, 'model_0.pth')):  # Fix the saving names
         opt.logger.warning('Picking up where we left')
         opt.start_from = glob.glob(opt.ensemblename + '/model_*.pth')
         opt.logger.debug('Loading saved models: %s' % str(opt.start_from))
         opt.optimizer_start_from = opt.ensemblename + '/optimizer.pth'
         opt.cnn_start_from = glob.glob(opt.ensemblename + '/model-cnn_*.pth')
         opt.infos_start_from = glob.glob(opt.ensemblename + '/infos_*.pkl')
-        infos = pickle.load(open(osp.join(opt.ensemblename, 'infos.pkl'), 'rb'), encoding='iso-8859-1')
+        infos = pl(osp.join(opt.ensemblename, 'infos.pkl'))
     if 'cnn_start_from' not in vars(opt):
         opt.start_from = []
         opt.infos_start_from = []
@@ -81,7 +81,7 @@ def recover_infos(opt):
         opt.start_from = osp.join(opt.modelname, 'model.pth')
         opt.infos_start_from = osp.join(opt.modelname, 'infos.pkl')
         opt.optimizer_start_from = osp.join(opt.modelname, 'optimizer.pth')
-        infos = pickle.load(open(opt.infos_start_from, 'rb'), encoding='iso-8859-1')
+        infos = pl(opt.infos_start_from)
 
     elif opt.start_from is not None:
         # open old infos and check if models are compatible
@@ -96,7 +96,7 @@ def recover_infos(opt):
         opt.optimizer_start_from = osp.join(opt.start_from, 'optimizer%s.pth' % flag)
         opt.start_from = osp.join(opt.start_from, 'model%s.pth' % flag)
 
-        infos = pickle.load(open(opt.infos_start_from, 'rb'), encoding='iso-8859-1')
+        infos = pl(opt.infos_start_from)
         saved_model_opt = infos['opt']
         need_be_same = ["model", "rnn_size_src", "rnn_size_trg", "num_layers_src", "num_layers_trg"]
         for checkme in need_be_same:

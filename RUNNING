@@ -114,3 +114,6 @@ word_idf_tword005_a04_wmt14
 importance_qhamming_pool1_tsent013_rbleu4_tsent05_a03_wmt14
 word_tword02_a05_wmt14
 baseline_wmt14_full
+word_tword02_a05_wmt14
+word_tword02_a05_wmt14
+strat_rhamming_pool1_tsent013_a03_wmt14

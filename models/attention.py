@@ -76,9 +76,9 @@ class Attention(Seq2Seq):
                 h_t = state_encoder[0][-1]
 
         h_t = nn.Tanh()(self.enc2dec_dropout(self.encoder2decoder(h_t)))
-        state = (h_t)
+        state = (h_t, )
         if self.rnn_type_src == "LSTM":
-            state.append(c_t)
+            state = (h_t, c_t)
         # FIXME check if tanh is the best choice
         return src_code, state
 
