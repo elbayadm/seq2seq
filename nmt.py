@@ -18,12 +18,13 @@ def train(opt):
         import subprocess
         # gpu_id = subproces.check_output('source gpu_setVisibleDevices.sh', shell=True)
         gpu_id = int(subprocess.check_output('gpu_getIDs.sh', shell=True))
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+        opt.logger.warn('GPU ID: %s | available memory: %dM' \
+                        % (os.environ['CUDA_VISIBLE_DEVICES'], get_gpu_memory(gpu_id)))
+
     except:
         print("Failed to get gpu_id (setting gpu_id to %d)" % opt.gpu_id)
         gpu_id = str(opt.gpu_id)
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-    opt.logger.warn('GPU ID: %s | available memory: %dM' \
-                    % (os.environ['CUDA_VISIBLE_DEVICES'], get_gpu_memory(gpu_id)))
 
     import torch
     from torch.autograd import Variable
