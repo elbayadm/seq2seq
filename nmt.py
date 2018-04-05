@@ -41,7 +41,6 @@ def train(opt):
     np.random.seed(opt.seed)
     tb_writer = SummaryWriter(opt.eventname)
     # tb_writer = tf.summary.FileWriter(opt.eventname)
-    opt.logger.warn('Running in dev branch')
     opt.logger.info('Reading data ...')
     src_loader = textDataLoader({'h5_file': opt.input_data_src+'.h5',
                                  'infos_file': opt.input_data_src+'.infos',
