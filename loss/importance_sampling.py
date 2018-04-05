@@ -57,13 +57,12 @@ class ImportanceSampler(nn.Module):
             self.logger.info('Sampled loss:')
             self.loss_sampled.log()
 
-    def forward(self, model, h_t, src_h, c_t,
+    def forward(self, model, src_code, state,
                 input_lines_trg, trg_lengths, output_lines_trg,
                 mask, scores=None):
         ilabels = input_lines_trg
         olabels = output_lines_trg
-        logp = model.forward_decoder(h_t,
-                                     src_h, c_t,
+        logp = model.forward_decoder(src_code, state,
                                      ilabels,
                                      trg_lengths)
         # Remove BOS token
@@ -112,7 +111,7 @@ class ImportanceSampler(nn.Module):
             else:
                 # Forward the sampled captions
                 mc_output, stats_sampled = self.batch_loss(model,
-                                                           h_t, src_h, c_t,
+                                                           src_code, state,
                                                            monte_carlo[0],
                                                            trg_lengths,
                                                            monte_carlo[1],
@@ -139,7 +138,7 @@ class ImportanceSampler(nn.Module):
                                                                     importance_normalized)
                 else:
                     mc_output, stats_sampled = self.batch_loss(model,
-                                                               h_t, src_h, c_t,
+                                                               src_code, state,
                                                                monte_carlo[mci][0],
                                                                trg_lengths,
                                                                monte_carlo[mci][1],
@@ -155,13 +154,13 @@ class ImportanceSampler(nn.Module):
             output /= MC
         return loss_gt, output, stats
 
-    def batch_loss(self, model, h_t, src_h, c_t,
+    def batch_loss(self, model, src_code, state,
                    ipreds_matrix, trg_lengths, opreds_matrix,
                    mask, scores):
         """
         forward the new sampled labels and return the loss
         """
-        logp = model.forward_decoder(h_t, src_h, c_t,
+        logp = model.forward_decoder(src_code, state,
                                      ipreds_matrix,
                                      trg_lengths)
 
