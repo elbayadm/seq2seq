@@ -167,6 +167,18 @@ class Seq2Seq(nn.Module):
                     del saved[k]
             self.logger.warn('Loading the model dict (last checkpoint) %s'\
                              % str(list(saved.keys())))
+            required_keys = list(self.state_dict())
+            for k in required_keys:
+                if k not in saved:
+                    if "module" in k:
+                        ki = k.split(".")
+                        ki.remove('module')
+                        kk = '.'.join(ki)
+                        assert kk in saved
+                        saved[k] = saved[kk]
+                        del saved[kk]
+                    else:
+                        self.logger.warn('Issue the key %s' % k)
             self.load_state_dict(saved)
 
     def step(self, input_lines_src, src_lengths,
