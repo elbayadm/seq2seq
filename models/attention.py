@@ -128,8 +128,8 @@ class Attention(Seq2Seq):
         batch_size = ctx.size(1)
         # Expand tensors for each beam.
         context = Variable(ctx.data.repeat(1, beam_size, 1))
-        dec_states = [Variable(h_0.data.repeat(1, beam_size, 1)),
-                      Variable(c_0.data.repeat(1, beam_size, 1))]
+        dec_states = [Variable(state[0].data.repeat(1, beam_size, 1)),
+                      Variable(state[1].data.repeat(1, beam_size, 1))]
 
         beam = [Beam(beam_size, opt) for k in range(batch_size)]
 
@@ -146,9 +146,11 @@ class Attention(Seq2Seq):
                                             (dec_states[0].squeeze(0), dec_states[1].squeeze(0)),
                                             context)
 
-            dec_states = (_.unsqueeze(0) for _ in trg_state)
+            print('trg_state:', trg_state)
+            dec_states = [_.unsqueeze(0) for _ in trg_state]
             # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
 
+            print('dec_states:', dec_states)
             dec_out = dec_states[0].squeeze(1)
             out = F.softmax(self.decoder2vocab(dec_out),
                             dim=1).unsqueeze(0)
