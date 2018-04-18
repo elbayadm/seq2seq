@@ -96,6 +96,8 @@ if __name__ == "__main__":
             if k not in ignore:
                 vars(opt).update({k: vars(infos['opt'])[k]})  # copy over options from model
 
+        # Avoid setting up intricate losses for no reason:
+        opt.loss_version = "ml"
         model = ms.select_model(opt, src_vocab_size, trg_vocab_size)
         model.load()
         opt.logger.warn('Transferring to cuda...')

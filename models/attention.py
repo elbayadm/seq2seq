@@ -146,11 +146,9 @@ class Attention(Seq2Seq):
                                             (dec_states[0].squeeze(0), dec_states[1].squeeze(0)),
                                             context)
 
-            print('trg_state:', trg_state)
             dec_states = [_.unsqueeze(0) for _ in trg_state]
             # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
 
-            print('dec_states:', dec_states)
             dec_out = dec_states[0].squeeze(1)
             out = F.softmax(self.decoder2vocab(dec_out),
                             dim=1).unsqueeze(0)

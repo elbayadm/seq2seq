@@ -61,7 +61,7 @@ def train(opt):
     iteration, epoch, opt, infos, history = ms.recover_infos(opt)
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
-    # iteration -= 1  # start with an evaluation
+    iteration -= 1  # start with an evaluation
     opt.logger.info('Starting from Epoch %d, iteration %d' % (epoch, iteration))
     # Recover data iterator and best perf
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
