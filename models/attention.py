@@ -101,7 +101,8 @@ class Attention(Seq2Seq):
             trg_h.size()[0] * trg_h.size()[1],
             trg_h.size()[2]
         )
-        decoder_logit = F.log_softmax(self.decoder2vocab(self.decoder_dropout(trg_h_reshape)))
+        decoder_logit = F.log_softmax(self.decoder2vocab(self.decoder_dropout(trg_h_reshape)),
+                                      dim=1)
         decoder_logit = decoder_logit.view(
             trg_h.size()[0],
             trg_h.size()[1],
@@ -149,7 +150,8 @@ class Attention(Seq2Seq):
             # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
 
             dec_out = dec_states[0].squeeze(1)
-            out = F.softmax(self.decoder2vocab(dec_out)).unsqueeze(0)
+            out = F.softmax(self.decoder2vocab(dec_out),
+                            dim=1).unsqueeze(0)
 
             word_lk = out.view(beam_size,
                                remaining_sents, -1).transpose(0, 1).contiguous()
@@ -243,7 +245,8 @@ class Attention(Seq2Seq):
                 trg_h.size()[0] * trg_h.size()[1],
                 trg_h.size()[2]
             )
-            decoder_logit = F.log_softmax(self.decoder2vocab(trg_h_reshape))[:, 1:]  # remove the padding pred
+            decoder_logit = F.log_softmax(self.decoder2vocab(trg_h_reshape),
+                                          dim=1)[:, 1:]  # remove the padding pred
             np_logits = decoder_logit.data.cpu().numpy()
             decoder_argmax = 1 + np_logits.argmax(axis=-1)
             if t:

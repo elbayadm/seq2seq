@@ -61,7 +61,7 @@ def train(opt):
     iteration, epoch, opt, infos, history = ms.recover_infos(opt)
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
-    iteration -= 1  # start with an evaluation
+    # iteration -= 1  # start with an evaluation
     opt.logger.info('Starting from Epoch %d, iteration %d' % (epoch, iteration))
     # Recover data iterator and best perf
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
@@ -139,6 +139,8 @@ def train(opt):
         grad_norm = []
         grad_norm.append(utils.clip_gradient(optimizer, opt.grad_clip))
         optimizer.step()
+        # train_loss = loss.data[0]
+        # train_ml_loss = ml_loss.data[0]
         train_loss = loss.data[0]
         train_ml_loss = ml_loss.data[0]
         if np.isnan(train_loss):

@@ -241,7 +241,7 @@ class LSTMAttention(nn.Module):
                     self.recurrent2attention.size(1)
                 )
             ).squeeze()
-            alpha = F.softmax(alpha)
+            alpha = F.softmax(alpha, dim=1)
             weighted_context = torch.mul(
                 ctx, alpha.t().unsqueeze(2).expand(ctx.size())
             ).sum(0).squeeze()
@@ -308,7 +308,7 @@ class SoftDotAttention(nn.Module):
         """Initialize layer."""
         super(SoftDotAttention, self).__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)
-        self.sm = nn.Softmax()
+        self.sm = nn.Softmax(dim=1)
         self.linear_out = nn.Linear(dim * 2, dim, bias=False)
         self.tanh = nn.Tanh()
         self.dropout = nn.Dropout(attn_dropout)
