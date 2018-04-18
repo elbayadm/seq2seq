@@ -15,6 +15,7 @@ class Seq2Seq(nn.Module):
         self.logger = opt.logger
         self.src_vocab_size = src_vocab_size
         self.trg_vocab_size = trg_vocab_size
+        self.pack_seq = opt.pack_seq
         self.seq_length = opt.max_trg_length
         self.src_emb_dim = opt.dim_word_src
         self.trg_emb_dim = opt.dim_word_trg

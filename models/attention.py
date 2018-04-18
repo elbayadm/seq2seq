@@ -29,6 +29,7 @@ class Attention(Seq2Seq):
                                                       batch_first=True,
                                                       dropout=self.encoder_dropout)
 
+        # self.encoder = nn.DataParallel(self.encoder)
         self.decoder = LSTMAttentionDot(
             self.trg_emb_dim,
             self.trg_hidden_dim,
@@ -45,16 +46,18 @@ class Attention(Seq2Seq):
             state_decoder: mapping of the source's last state
         """
         src_emb = self.input_encoder_dropout(self.src_embedding(input_src))
-        # order = np.argsort(src_lengths)
-        src_emb = pack_padded_sequence(src_emb,
-                                       src_lengths,
-                                       batch_first=True)
+        if self.pack_seq:
+            src_emb = pack_padded_sequence(src_emb,
+                                           src_lengths,
+                                           batch_first=True)
 
         state_encoder = self.get_init_state(input_src)
         # h0_encoder, c0_encoder = self.get_init_state(input_src)
         # src_code, (src_h_t, src_c_t) = self.encoder(src_emb, state_encoder)
         src_code, state_encoder = self.encoder(src_emb, state_encoder)
-        src_code, _ = pad_packed_sequence(src_code)  # restore
+        if self.pack_seq:
+            src_code, _ = pad_packed_sequence(src_code,
+                                              batch_first=True)  # restore
         if self.bidirectional:
             if self.rnn_type_src == "LSTM":
                 h_t = torch.cat((state_encoder[0][-1],
@@ -130,8 +133,6 @@ class Attention(Seq2Seq):
         context = Variable(ctx.data.repeat(1, beam_size, 1))
         dec_states = [Variable(state[0].data.repeat(1, beam_size, 1)),
                       Variable(state[1].data.repeat(1, beam_size, 1))]
-        print('Initial states:', dec_states[0].size(),
-              dec_states[1].size())
 
         beam = [Beam(beam_size, opt) for k in range(batch_size)]
 

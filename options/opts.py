@@ -181,6 +181,7 @@ def add_generic_params(parser):
                default='0')
     # Data parameters:
     parser.add('--seq_per_img', type=int, default=1)  # irrelevant here
+    parser.add('--pack_seq', type=int, default=1)
     parser.add('--max_src_length', type=int, default=50)
     parser.add('--max_trg_length', type=int, default=50)
 
