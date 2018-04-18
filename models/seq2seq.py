@@ -80,15 +80,14 @@ class Seq2Seq(nn.Module):
 
     def get_init_state(self, input):
         """Get cell states and hidden states."""
-        batch_size = input.size(0) \
-            if self.encoder.batch_first else input.size(1)
+        batch_size = input.size(0)
         h0_encoder = Variable(torch.zeros(
-            self.encoder.num_layers * self.num_directions,
+            self.nlayers_src * self.num_directions,
             batch_size,
             self.src_hidden_dim
         ), requires_grad=False)
         c0_encoder = Variable(torch.zeros(
-            self.encoder.num_layers * self.num_directions,
+            self.nlayers_src * self.num_directions,
             batch_size,
             self.src_hidden_dim
         ), requires_grad=False)
