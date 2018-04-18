@@ -177,8 +177,8 @@ def add_generic_params(parser):
 
     # Running settings
     # Gpu id if required (LIG servers)
-    parser.add('--gpu_id', type=int,
-               default=0)
+    parser.add('--gpu_id', type=str,
+               default='0')
     # Data parameters:
     parser.add('--seq_per_img', type=int, default=1)  # irrelevant here
     parser.add('--max_src_length', type=int, default=50)

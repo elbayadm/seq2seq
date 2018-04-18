@@ -39,8 +39,8 @@ class Beam(object):
         self.prevKs = []
 
         # The outputs at each time-step.
-        self.nextYs = [self.tt.LongTensor(size).fill_(self.pad)]
-        self.nextYs[0][0] = self.bos
+        self.nextYs = [self.tt.LongTensor(size).fill_(self.bos)]
+        # self.nextYs[0][0] = self.bos
 
         # The attentions (matrix) for each time.
         self.attn = []
@@ -87,6 +87,7 @@ class Beam(object):
         self.nextYs.append(bestScoresId - prev_k * num_words)
 
         # End condition is when top-of-beam is EOS.
+        # print(self.nextYs[-1])
         if self.nextYs[-1][0] == self.eos:
             self.done = True
 

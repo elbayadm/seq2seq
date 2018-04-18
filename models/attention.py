@@ -130,6 +130,8 @@ class Attention(Seq2Seq):
         context = Variable(ctx.data.repeat(1, beam_size, 1))
         dec_states = [Variable(state[0].data.repeat(1, beam_size, 1)),
                       Variable(state[1].data.repeat(1, beam_size, 1))]
+        print('Initial states:', dec_states[0].size(),
+              dec_states[1].size())
 
         beam = [Beam(beam_size, opt) for k in range(batch_size)]
 
@@ -143,13 +145,19 @@ class Attention(Seq2Seq):
             # check if I shoul add _BOS
             trg_emb = self.trg_embedding(Variable(input).transpose(1, 0))
             trg_h, trg_state = self.decoder(trg_emb,
-                                            (dec_states[0].squeeze(0), dec_states[1].squeeze(0)),
+                                            (dec_states[0].squeeze(0),
+                                             dec_states[1].squeeze(0)),
                                             context)
 
             dec_states = [_.unsqueeze(0) for _ in trg_state]
+            if i == 4:
+                print('post decoding:', dec_states[0].size(), dec_states[1].size())
             # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
 
             dec_out = dec_states[0].squeeze(1)
+            if i == 4:
+                print('dec_out:', dec_out.size())
+                print('trg_h:', trg_h.size())
             out = F.softmax(self.decoder2vocab(dec_out),
                             dim=1).unsqueeze(0)
 

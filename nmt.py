@@ -23,8 +23,10 @@ def train(opt):
                         % (os.environ['CUDA_VISIBLE_DEVICES'], get_gpu_memory(gpu_id)))
 
     except:
-        print("Failed to get gpu_id (setting gpu_id to %d)" % opt.gpu_id)
-        gpu_id = str(opt.gpu_id)
+        opt.logger.warn("Requested gpu_id : %s" % opt.gpu_id)
+        os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
+        opt.loger.warn('Sanity check: %s' % os.environ['CUDA_VISIBLE_DEVICES'])
+
 
     import torch
     from torch.autograd import Variable
@@ -61,7 +63,7 @@ def train(opt):
     iteration, epoch, opt, infos, history = ms.recover_infos(opt)
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
     trg_loader.iterators = infos.get('trg_iterators', trg_loader.iterators)
-    iteration -= 1  # start with an evaluation
+    # iteration -= 1  # start with an evaluation
     opt.logger.info('Starting from Epoch %d, iteration %d' % (epoch, iteration))
     # Recover data iterator and best perf
     src_loader.iterators = infos.get('src_iterators', src_loader.iterators)
