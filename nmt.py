@@ -25,7 +25,7 @@ def train(opt):
     except:
         opt.logger.warn("Requested gpu_id : %s" % opt.gpu_id)
         os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
-        opt.loger.warn('Sanity check: %s' % os.environ['CUDA_VISIBLE_DEVICES'])
+        opt.logger.warn('Sanity check: %s' % os.environ['CUDA_VISIBLE_DEVICES'])
 
 
     import torch
