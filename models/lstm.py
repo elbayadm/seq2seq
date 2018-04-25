@@ -17,7 +17,7 @@ class ConvAttention(nn.Module):
       }
     """
 
-    def __init__(self, dim, opt):
+    def __init__(self, opt):
         """Initialize layer."""
         super(ConvAttention, self).__init__()
         src_emb_dim = opt.dim_word_src
