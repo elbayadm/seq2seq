@@ -28,39 +28,44 @@ class ConvAttention(nn.Module):
         w3 = 11
         # check if padding necessary
         # padding to maintaing the same length
-        self.conv1 = nn.Conv1d(src_emb_dim, interm_dim, w1, padding=(w1-1)/2)
+        self.conv1 = nn.Conv1d(src_emb_dim, interm_dim, w1, padding=(w1-1)//2)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(interm_dim, dim, w2, padding=(w2-1)/2)
-        self.conv3 = nn.Conv1d(dim, 1, w3, padding=(w3-1)/2)
-        self.sm = nn.Softmax(dim=1)
+        self.conv2 = nn.Conv1d(interm_dim, dim, w2, padding=(w2-1)//2)
+        self.conv3 = nn.Conv1d(dim, 1, w3, padding=(w3-1)//2)
+        self.sm = nn.Softmax(dim=2)
         self.linear_out = nn.Linear(dim + src_emb_dim, dim, bias=False)
+        self.tanh = nn.Tanh()
 
     def forward(self, input, context, src_emb):
         """Propogate input through the network.
         input: batch x dim
         context: batch x sourceL x dim
         """
-        print('src_emb:', src_emb.size())
+        src_emb = src_emb.transpose(1, 2)
+        # print('src_emb:', src_emb.size())
         L1 = self.relu(self.conv1(src_emb))
-        print('L1:', L1.size())
+        # print('L1:', L1.size())
         L2 = self.conv2(L1)
-        print('L2:', L2.size())
+        # print('L2:', L2.size())
         # columnwize dot product
-        print('input:', input.size())
-        L2 = L2 * input
+        # print('input:', input.size())
+        L2 = L2 * input.unsqueeze(2).repeat(1, 1, L2.size(2))
+        # print('L2 after dot product:', L2.size())
         # L2 normalization:
         norm = L2.norm(p=2, dim=2, keepdim=True)
-        print('L2 norm:', norm)
         L2 = L2.div(norm)
+        # print('L2 normalized:', L2.size())
         attn = self.conv3(L2)
-        print('attn:', attn.size())
+        # print('attn:', attn.size())
         attn_sm = self.sm(attn)
-        print('attn_sm:', attn_sm)
-        attn_reshape = attn_sm.view(attn_sm.size(0), 1, attn_sm.size(1))  # batch x 1 x sourceL
-        print('attn_reshape:', attn_reshape)
-        weighted_context = torch.bmm(attn_reshape, src_emb).squeeze(1)  # batch x dim
+        # print('attn_sm:', attn_sm)
+        attn_reshape = attn_sm.transpose(1, 2)
+        # print('attn_reshape:', attn_reshape)
+        weighted_context = torch.bmm(src_emb, attn_reshape).squeeze(2)  # batch x dim
+        # print('weighted ctx:', weighted_context.size())
         h_tilde = torch.cat((weighted_context, input), 1)
         h_tilde = self.tanh(self.linear_out(h_tilde))
+        # print('htidle:', h_tilde.size())
         return h_tilde, attn
 
 
