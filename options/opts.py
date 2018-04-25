@@ -171,6 +171,9 @@ def add_generic_params(parser):
 
     parser.add('--model', type=str,
                default="attention", help='vanilla, attention')
+    parser.add('--attention_mode', type=str,
+               default="dot", help='how to compute the attention scores')
+
     parser.add('--verbose', type=int, default=0,
                help='code verbosity')
     parser.add('--seed', type=int, default=1, help="seed for all randomizer")
@@ -182,6 +185,7 @@ def add_generic_params(parser):
     # Data parameters:
     parser.add('--seq_per_img', type=int, default=1)  # irrelevant here
     parser.add('--pack_seq', type=int, default=1)
+    parser.add('--parallel', type=int, default=0)
     parser.add('--max_src_length', type=int, default=50)
     parser.add('--max_trg_length', type=int, default=50)
 

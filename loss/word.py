@@ -88,8 +88,10 @@ class WordSmoothCriterion(nn.Module):
             self.Sim_Matrix = M
             n, d = self.Sim_Matrix.size()
         else:
-            # self.Sim_Matrix = Variable(sparse_torch(M),
-                                       # requires_grad=False).cuda()
+            if opt.promote_rarity:
+                IDF = pl(opt.rarity_matrix)
+                M -= self.tau_word * opt.promote_rarity * IDF
+                del IDF
             self.Sim_Matrix = sparse_torch(M).cuda()
             n, d = self.Sim_Matrix.size()
         print('Sim matrix:', n, 'x', d, ' V=', opt.vocab_size)
@@ -128,7 +130,7 @@ class WordSmoothCriterion(nn.Module):
             if self.tau_word:
                 row_values = torch.exp(row_values/self.tau_word)
                 row_values = torch.exp(torch.mul(row_values, 1/self.tau_word))
-            l1 = torch.sum(row_values) + (nc - NNZ) * dvalue
+            l1 = torch.sum(row_values) + (nc - NNZ) * dvalue  # float
             subT[e][cols[slice_index]] = row_values/l1
         return subT
 

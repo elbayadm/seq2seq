@@ -178,6 +178,7 @@ class Seq2Seq(nn.Module):
                         saved[k] = saved[kk]
                         del saved[kk]
                     else:
+                        # Add module
                         self.logger.warn('Issue the key %s' % k)
             self.load_state_dict(saved)
 

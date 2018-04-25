@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from .beam_search import Beam
 from .seq2seq import Seq2Seq
-from .lstm import LSTMAttentionDot
+from .lstm import LSTMAttention
 _BOS = 3
 _EOS = 2
 _UNK = 1
@@ -19,7 +19,6 @@ class Attention(Seq2Seq):
     def __init__(self, opt, src_vocab_size, trg_vocab_size):
         """Initialize model."""
         super(Attention, self).__init__(opt, src_vocab_size, trg_vocab_size)
-        self.attention_mode = 'dot'
         self.max_trg_length = opt.max_trg_length
         self.rnn_type_src = opt.rnn_type_src.upper()
         self.encoder = getattr(nn, self.rnn_type_src)(self.src_emb_dim,
@@ -29,13 +28,10 @@ class Attention(Seq2Seq):
                                                       batch_first=True,
                                                       dropout=self.encoder_dropout)
 
-        # self.encoder = nn.DataParallel(self.encoder)
-        self.decoder = LSTMAttentionDot(
-            self.trg_emb_dim,
-            self.trg_hidden_dim,
-            batch_first=True,
-            dropout=self.attention_dropout
-        )
+        if opt.parallel:
+            self.encoder = nn.DataParallel(self.encoder)
+            self.pack_seq = 0
+        self.decoder = LSTMAttention(opt)
 
         self.init_weights()
 
@@ -46,6 +42,7 @@ class Attention(Seq2Seq):
             state_decoder: mapping of the source's last state
         """
         src_emb = self.input_encoder_dropout(self.src_embedding(input_src))
+        _src_emb = src_emb  # to pass in case needed for attenion scores
         if self.pack_seq:
             src_emb = pack_padded_sequence(src_emb,
                                            src_lengths,
@@ -83,11 +80,10 @@ class Attention(Seq2Seq):
         if self.rnn_type_src == "LSTM":
             state = (h_t, c_t)
         # FIXME check if tanh is the best choice
-        return src_code, state
+        return _src_emb, src_code, state
 
-    def forward_decoder(self, src_h, state,
-                        input_trg, trg_lengths,
-                        ctx_mask=None):
+    def forward_decoder(self, src_emb, src_h, state,
+                        input_trg, trg_lengths):
         trg_emb = self.input_decoder_dropout(self.trg_embedding(input_trg))
         # trg_emb = pack_padded_sequence(trg_emb,
                                        # trg_lengths,
@@ -97,7 +93,7 @@ class Attention(Seq2Seq):
             trg_emb,
             state,
             ctx,
-            ctx_mask
+            src_emb
         )
 
         trg_h_reshape = trg_h.contiguous().view(
@@ -113,58 +109,50 @@ class Attention(Seq2Seq):
         )
         return decoder_logit
 
-    def forward(self, input_src, src_lengths, input_trg, trg_lengths, trg_mask=None, ctx_mask=None):
+    def forward(self, input_src, src_lengths, input_trg, trg_lengths, trg_mask=None):
         """Propogate input through the network."""
-        src_code, state = self.get_decoder_init_state(input_src, src_lengths)
-        decoder_logit = self.forward_decoder(src_code, state,
+        src_emb, src_code, state = self.get_decoder_init_state(input_src, src_lengths)
+        decoder_logit = self.forward_decoder(src_emb, src_code, state,
                                              input_trg,
-                                             trg_lengths,
-                                             ctx_mask)
+                                             trg_lengths)
         return decoder_logit
 
-    def sample_beam(self, input_src, src_lengths, ctx_mask=None, opt={}):
+    def sample_beam(self, input_src, src_lengths, opt={}):
         beam_size = opt.get('beam_size', 3)
         batch_size = input_src.size(0)
         # encode the source
         src_code, state = self.get_decoder_init_state(input_src, src_lengths)
-        ctx = src_code
-        batch_size = ctx.size(1)
-        # Expand tensors for each beam.
-        context = Variable(ctx.data.repeat(1, beam_size, 1))
-        dec_states = [Variable(state[0].data.repeat(1, beam_size, 1)),
-                      Variable(state[1].data.repeat(1, beam_size, 1))]
+        # src_code N x T x D
+        # state 2 * (N x D)
+        # context = Variable(src_code.data.repeat(beam_size, 1, 1))
+        context = src_code.repeat(beam_size, 1, 1)
+        # dec_states = [Variable(state[0].data.repeat(1, beam_size, 1)),
+                      # Variable(state[1].data.repeat(1, beam_size, 1))]
+        dec_states = [state[0].repeat(beam_size, 1),
+                      state[1].repeat(beam_size, 1)]
 
         beam = [Beam(beam_size, opt) for k in range(batch_size)]
-
         batch_idx = list(range(batch_size))
         remaining_sents = batch_size
-        for i in range(self.opt.max_trg_length):
+        for t in range(self.opt.max_trg_length):
             input = torch.stack([b.get_current_state()
                                  for b in beam if not b.done]
                                 ).t().contiguous().view(1, -1)
 
             # check if I shoul add _BOS
             trg_emb = self.trg_embedding(Variable(input).transpose(1, 0))
-            trg_h, trg_state = self.decoder(trg_emb,
-                                            (dec_states[0].squeeze(0),
-                                             dec_states[1].squeeze(0)),
-                                            context)
-
-            dec_states = [_.unsqueeze(0) for _ in trg_state]
-            if i == 4:
-                print('post decoding:', dec_states[0].size(), dec_states[1].size())
-            # (trg_h_t.unsqueeze(0), trg_c_t.unsqueeze(0))
-
-            dec_out = dec_states[0].squeeze(1)
-            if i == 4:
-                print('dec_out:', dec_out.size())
-                print('trg_h:', trg_h.size())
-            out = F.softmax(self.decoder2vocab(dec_out),
-                            dim=1).unsqueeze(0)
-
+            trg_h, dec_states = self.decoder(trg_emb,
+                                             dec_states,
+                                             context,
+                                             src_emb=src_emb)
+            trg_h_reshape = trg_h.contiguous().view(
+                trg_h.size()[0] * trg_h.size()[1],
+                trg_h.size()[2]
+            )
+            out = F.softmax(self.decoder2vocab(trg_h_reshape),
+                            dim=1)
             word_lk = out.view(beam_size,
                                remaining_sents, -1).transpose(0, 1).contiguous()
-
             active = []
             for b in range(batch_size):
                 if beam[b].done:
@@ -176,16 +164,16 @@ class Attention(Seq2Seq):
 
                 for dec_state in dec_states:  # iterate over h, c
                     # layers x beam*sent x dim
+                    dec_size = dec_state.size()
                     sent_states = dec_state.view(
-                        -1, beam_size, remaining_sents, dec_state.size(2)
-                    )[:, :, idx]
+                        beam_size, remaining_sents, dec_size[-1]
+                    )[:, idx, :]
                     sent_states.data.copy_(
                         sent_states.data.index_select(
-                            1,
+                            0,
                             beam[b].get_current_origin()
                         )
                     )
-
             if not active:
                 break
 
@@ -196,7 +184,7 @@ class Attention(Seq2Seq):
 
             def update_active(t):
                 # select only the remaining active sentences
-                view = t.data.view(
+                view = t.data.contiguous().view(
                     -1, remaining_sents,
                     # self.model.decoder.hidden_size
                     self.trg_hidden_dim
@@ -204,17 +192,16 @@ class Attention(Seq2Seq):
                 new_size = list(t.size())
                 new_size[-2] = new_size[-2] * len(active_idx) \
                     // remaining_sents
-                return Variable(view.index_select(
+                result = Variable(view.index_select(
                     1, active_idx
                 ).view(*new_size))
+                return result
 
             dec_states = (
                 update_active(dec_states[0]),
                 update_active(dec_states[1])
             )
-            dec_out = update_active(dec_out)
-            context = update_active(context)
-
+            context = update_active(context.t()).t()
             remaining_sents = len(active)
 
         # Wrap up
@@ -228,16 +215,15 @@ class Attention(Seq2Seq):
             allHyp += [hyps]
         return allHyp, allScores
 
-    def sample(self, input_src, src_lengths, ctx_mask=None, opt={}):
+    def sample(self, input_src, src_lengths, opt={}):
         beam_size = opt.get('beam_size', 1)
         if beam_size > 1:
-            return self.sample_beam(input_src, src_lengths, ctx_mask, opt)
+            return self.sample_beam(input_src, src_lengths, opt)
         batch_size = input_src.size(0)
         BOS = opt.get('BOS', _BOS)
         EOS = opt.get('EOS', _EOS)
-
         seq = []
-        src_h, state_0 = self.get_decoder_init_state(input_src, src_lengths)
+        src_emb, src_h, state_0 = self.get_decoder_init_state(input_src, src_lengths)
         ctx = src_h
         for t in range(self.opt.max_trg_length):
             if t == 0:
@@ -248,7 +234,7 @@ class Attention(Seq2Seq):
                 trg_emb,
                 state,
                 ctx,
-                ctx_mask
+                src_emb
             )
             trg_h_reshape = trg_h.contiguous().view(
                 trg_h.size()[0] * trg_h.size()[1],

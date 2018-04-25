@@ -149,7 +149,8 @@ if __name__ == "__main__":
                                     logger=opt.logger)
         eval_kwargs = {"split": opt.split,
                        "beam_size": opt.beam_size,
-                       "verbose": 1}
+                       "verbose": 1,
+                       "batch_size" : opt.batch_size}
         eval_kwargs.update(vars(opt))
         preds = json.load(open(opt.output + '.json', 'r'))
         scores = score_trads(preds, trg_loader, eval_kwargs)

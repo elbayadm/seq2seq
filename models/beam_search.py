@@ -74,9 +74,7 @@ class Beam(object):
             beam_lk = workd_lk + self.scores.unsqueeze(1).expand_as(workd_lk)
         else:
             beam_lk = workd_lk[0]
-
         flat_beam_lk = beam_lk.view(-1)
-
         bestScores, bestScoresId = flat_beam_lk.topk(self.size, 0, True, True)
         self.scores = bestScores
 

@@ -218,6 +218,7 @@ def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
         # print('Sampling sentence')
         # print('GPU:', os.environ['CUDA_VISIBLE_DEVICES'])
         start = time.time()
+        # print('>>> Sampling:')
         batch_preds, _ = model.sample(input_lines_src, src_lengths, opt=eval_kwargs)
         if isinstance(batch_preds, list):
             # wiht beam size unpadded preds
