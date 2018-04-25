@@ -25,6 +25,8 @@ def train(opt):
     except:
         opt.logger.warn("Requested gpu_id : %s" % opt.gpu_id)
         os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
+        opt.logger.warn('GPU ID: %s | available memory: %dM' \
+                        % (os.environ['CUDA_VISIBLE_DEVICES'], get_gpu_memory(opt.gpu_id)))
 
 
     import torch
