@@ -173,7 +173,9 @@ def add_generic_params(parser):
                default="attention", help='vanilla, attention')
     parser.add('--attention_mode', type=str,
                default="dot", help='how to compute the attention scores')
-
+    parser.add('--normalize_attention',
+               type=int, default=1,
+               help='Normalize the attention feature maps prior to compting the combination weights')
     parser.add('--verbose', type=int, default=0,
                help='code verbosity')
     parser.add('--seed', type=int, default=1, help="seed for all randomizer")
