@@ -6,33 +6,32 @@
 BQ=''
 TX=''
 K40=''
-while getopts 'btk' flag; do
+while getopts 'bmlk' flag; do
     echo "Reading flag "$flag
     case "${flag}" in
-        b) BQ='true' ;;
-        t) TX='true' ;;
-        k) K40='true' ;;
+        b) BQ='true' ;;  # Besteffort
+        m) MED='true' ;;  # Exclude gtx
+        l) P100='true' ;;  # Request a p100
+        k) K40='true' ;;  # tolerate k40
         *) error "Unexpected option ${flag}" ;;
     esac
 done
-echo titanx:$TX besteffort $BQ k40 tolereance $K40
 shift $((OPTIND-1))
-
 JOB=$1
-MEM=$2
 
 echo traininig $JOB
 mkdir -p 'save/'$JOB
 
-if [ $TX ]; then
-    oarprop="\"gpumodel='titan_x_pascal' or gpumodel='titan_x'\""
-    echo $oarprop
-else 
-    if [ $K40 ]; then
-        oarprop="\"gpumem>'$MEM'"
-    else
-        oarprop="\"not gpumodel='k40m' and gpumem>'$MEM'\""
-    fi
+if [ $K40 ]; then
+    oarprop=""
+else
+    oarprop="\"gpumodel<>'k40m'\""
+fi
+if [ $MED ]; then
+    oarprop="\"(gpumodel<>'k40m' and gpumodel<>'gtx1080' and gpumodel<>'gtx1080_ti')\""
+fi
+if  [ $P100 ]; then
+    oarprop="\"gpumodel='p100'\""
 fi
 echo "OAR requirements:" $oarprop 
 
