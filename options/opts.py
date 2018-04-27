@@ -164,6 +164,21 @@ def add_loss_params(parser):
     return parser
 
 
+def add_attention_params(parser):
+    parser.add('--attention_mode', type=str,
+               default="dot", help='how to compute the attention scores - Experimenting!')
+    parser.add('--normalize_attention',
+               type=int, default=1,
+               help='Normalize the attention feature maps prior to compting the combination weights')
+    parser.add('--attention_dropout', type=float,
+               default=0, help='strength of dropout in the Language Model RNN input')
+    parser.add('--attention_channels', type=str, default="64,32",
+               help="number of output channels in the convolutional attention. Used only in some cases")
+    parser.add('--attention_windows', type=str, default="9,7,5",
+               help="number of output channels in the convolutional attention. Used only in some cases")
+    return parser
+
+
 def add_generic_params(parser):
     parser.add('-c', '--config', is_config_file=True, help='Config file path')
     parser.add('--modelname', type=str,
@@ -171,11 +186,6 @@ def add_generic_params(parser):
 
     parser.add('--model', type=str,
                default="attention", help='vanilla, attention')
-    parser.add('--attention_mode', type=str,
-               default="dot", help='how to compute the attention scores')
-    parser.add('--normalize_attention',
-               type=int, default=1,
-               help='Normalize the attention feature maps prior to compting the combination weights')
     parser.add('--verbose', type=int, default=0,
                help='code verbosity')
     parser.add('--seed', type=int, default=1, help="seed for all randomizer")
@@ -211,6 +221,9 @@ def add_generic_params(parser):
                default=2000, help='size of the rnn in number of hidden nodes in each layer')
     parser.add('--rnn_type_trg', type=str,
                default='lstm', help='rnn, gru, or lstm')
+    parser.add('--lstm_mode', type=int,
+               default=1, help='if 1 then the previous hidden state is actually \tilde h_t')
+
     parser.add('--num_layers_src', type=int,
                default=2, help='number of layers in the RNN')
     parser.add('--num_layers_trg', type=int,
@@ -228,8 +241,6 @@ def add_generic_params(parser):
     parser.add('--decoder_dropout', type=float,
                default=0, help='strength of dropout in the Language Model RNN input')
     parser.add('--input_decoder_dropout', type=float,
-               default=0, help='strength of dropout in the Language Model RNN input')
-    parser.add('--attention_dropout', type=float,
                default=0, help='strength of dropout in the Language Model RNN input')
     parser.add('--scale_grad_by_freq', type=int,
                default=0, help='scale gradient of the embedding layers by the word frequency in the minibatch')
@@ -341,6 +352,7 @@ def parse_opt():
     parser.add('--load_best_score', type=int,
                default=1, help='Do we load previous best score when resuming training.')
     parser = add_generic_params(parser)
+    parser = add_attention_params(parser)
     parser = add_loss_params(parser)
     parser = add_optim_params(parser)
     parser = add_eval_params(parser)
@@ -362,6 +374,7 @@ def parse_opt():
 def parse_eval_opt():
     parser = configargparse.ArgParser()
     parser = add_generic_params(parser)
+    parser = add_attention_params(parser)
     parser = add_loss_params(parser)
     parser = add_optim_params(parser)
     parser = add_eval_params(parser)

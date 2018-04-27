@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class ConvAttentionEmb(nn.Module):
+class AllamanisConvAttention(nn.Module):
     """
     Convolutional attention
     @inproceedings{allamanis2016convolutional,
@@ -19,89 +19,108 @@ class ConvAttentionEmb(nn.Module):
     """
 
     def __init__(self, opt):
-        """Initialize layer."""
-        super(ConvAttentionEmb, self).__init__()
+        super(AllamanisConvAttention, self).__init__()
         src_emb_dim = opt.dim_word_src
-        interm_dim = src_emb_dim // 2  # k1
-        dim = opt.rnn_size_trg  # k2
+        dims = opt.attention_channels.split(',')
+        dim1, dim2 = [int(d) for d in dims]
+        print('Out channels dims:', dim1, dim2)
+        trg_dim = opt.rnn_size_trg
         self.normalize = opt.normalize_attention
-        w1 = 9  # first kernel width
-        w2 = 7  # second kernel width
-        w3 = 5
-        # check if padding necessary
+        widths = opt.attention_windows.split(',')
+        w1, w2, w3 = [int(w) for w in widths]
+        print('Moving windows sizes:', w1, w2, w3)
+        self.normalize = opt.normalize_attention
         # padding to maintaing the same length
-        self.conv1 = nn.Conv1d(src_emb_dim, interm_dim, w1, padding=(w1-1)//2)
+        self.conv1 = nn.Conv1d(src_emb_dim, dim1, w1, padding=(w1-1)//2)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(interm_dim, dim, w2, padding=(w2-1)//2)
-        self.conv3 = nn.Conv1d(dim, 1, w3, padding=(w3-1)//2)
+        self.conv2 = nn.Conv1d(dim1, trg_dim, w2, padding=(w2-1)//2)
+        self.conv3 = nn.Conv1d(trg_dim, 1, w3, padding=(w3-1)//2)
         self.sm = nn.Softmax(dim=2)
-        self.linear_out = nn.Linear(dim + src_emb_dim, dim, bias=False)
+        self.linear_out = nn.Linear(trg_dim + src_emb_dim, trg_dim, bias=False)
         self.tanh = nn.Tanh()
 
-    def forward(self, input, context, src_emb):
-        """Propogate input through the network.
-        input: batch x dim
-        context: batch x sourceL x dim
+    def score(self, input, context, src_emb):
+        """
+        input: batch x trg_dim
+        context & src_emb : batch x Tx x src_dim (resp. src_emb_dim)
+        return the alphas for comuting the weighted context
         """
         src_emb = src_emb.transpose(1, 2)
-        # print('src_emb:', src_emb.size())
         L1 = self.relu(self.conv1(src_emb))
-        # print('L1:', L1.size())
         L2 = self.conv2(L1)
-        # print('L2:', L2.size())
-        # columnwise dot product
-        # print('input:', input.size())
+        # columnwise multiplication
         L2 = L2 * input.unsqueeze(2).repeat(1, 1, L2.size(2))
-        # print('L2 after dot product:', L2.size())
         # L2 normalization:
         if self.normalize:
             norm = L2.norm(p=2, dim=1, keepdim=True)  # check if 2 is the right dim
-            # print('norm size:', norm.size())
             L2 = L2.div(norm)
             if len((norm == 0).nonzero()):
                 print('Zero norm!!')
-        # print('L2 normalized:', L2.size())
         attn = self.conv3(L2)
-        # print('attn:', attn.size())
         attn_sm = self.sm(attn)
-        # print('attn_sm:', attn_sm)
+        return attn_sm
+
+    def forward(self, input, context, src_emb):
+        """
+        Score the context (resp src embedding)
+        and return a new context as a combination of either
+        the source embeddings or the hidden source codes
+        """
+        attn_sm = self.score(input, context, src_emb)
         attn_reshape = attn_sm.transpose(1, 2)
-        # print('attn_reshape:', attn_reshape)
         weighted_context = torch.bmm(src_emb, attn_reshape).squeeze(2)  # batch x dim
-        # print('weighted ctx:', weighted_context.size())
         h_tilde = torch.cat((weighted_context, input), 1)
         h_tilde = self.tanh(self.linear_out(h_tilde))
-        # print('htidle:', h_tilde.size())
-        return h_tilde, attn
+        return h_tilde, attn_sm
 
 
-class ConvAttentionEmb2(nn.Module):
+class AllamanisConvAttentionBis(AllamanisConvAttention):
     """
-    Convolutional attention
-    Similar to ConvAttentionEmb with the only difference at computing
+    Similar to AllamanisConvAttention with the only difference at computing
     the weighted context which takes the encoder's hidden states
     instead of the source word embeddings
     """
 
     def __init__(self, opt):
-        """Initialize layer."""
-        super(ConvAttentionEmb2, self).__init__()
-        src_emb_dim = opt.dim_word_src
+        super(AllamanisConvAttentionBis, self).__init__(opt)
+
+    def forward(self, input, context, src_emb):
+        attn_sm = self.score(input, context, src_emb)
+        attn_reshape = attn_sm.transpose(1, 2)
+        weighted_context = torch.bmm(context.transpose(1, 2),
+                                     attn_reshape).squeeze(2)  # batch x dim
+        h_tilde = torch.cat((weighted_context, input), 1)
+        h_tilde = self.tanh(self.linear_out(h_tilde))
+        return h_tilde, attn_sm
+
+
+class ConvAttentionHid(nn.Module):
+    """
+    Convolutional attention
+    All around similar to Allamanis attention while never
+    using the source word embeddings
+    """
+
+    def __init__(self, opt):
+        super(ConvAttentionHid, self).__init__()
         src_dim = opt.rnn_size_src
-        interm_dim = src_emb_dim // 2  # k1
-        dim = opt.rnn_size_trg  # k2
+        dims = opt.attention_channels.split(',')
+        dim1, dim2 = [int(d) for d in dims]
+        print('Out channels dims:', dim1, dim2)
+        trg_dim = opt.rnn_size_trg
         self.normalize = opt.normalize_attention
-        w1 = 9  # first kernel width
-        w2 = 7  # second kernel width
-        w3 = 5
-        # check if padding necessary
+        widths = opt.attention_windows.split(',')
+        w1, w2, w3 = [int(w) for w in widths]
+        print('Moving windows sizes:', w1, w2, w3)
+        trg_dim = opt.rnn_size_trg
+        self.normalize = opt.normalize_attention
         # padding to maintaing the same length
-        self.conv1 = nn.Conv1d(src_emb_dim, interm_dim, w1, padding=(w1-1)//2)
+        self.conv1 = nn.Conv1d(src_dim, dim1, w1, padding=(w1-1)//2)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(interm_dim, dim, w2, padding=(w2-1)//2)
-        self.conv3 = nn.Conv1d(dim, 1, w3, padding=(w3-1)//2)
+        self.conv2 = nn.Conv1d(dim1, trg_dim, w2, padding=(w2-1)//2)
+        self.conv3 = nn.Conv1d(trg_dim, 1, w3, padding=(w3-1)//2)
         self.sm = nn.Softmax(dim=2)
-        self.linear_out = nn.Linear(dim + src_dim, dim, bias=False)
+        self.linear_out = nn.Linear(trg_dim + src_dim, trg_dim, bias=False)
         self.tanh = nn.Tanh()
 
     def forward(self, input, context, src_emb):
@@ -109,65 +128,51 @@ class ConvAttentionEmb2(nn.Module):
         input: batch x dim
         context: batch x sourceL x dim
         """
-        src_emb = src_emb.transpose(1, 2)
-        # print('src_emb:', src_emb.size())
-        L1 = self.relu(self.conv1(src_emb))
-        # print('L1:', L1.size())
+        context = context.transpose(1, 2)
+        L1 = self.relu(self.conv1(context))
         L2 = self.conv2(L1)
-        # print('L2:', L2.size())
         # columnwise dot product
-        # print('input:', input.size())
         L2 = L2 * input.unsqueeze(2).repeat(1, 1, L2.size(2))
-        # print('L2 after dot product:', L2.size())
         # L2 normalization:
         if self.normalize:
             norm = L2.norm(p=2, dim=2, keepdim=True)
-            # print('norm:', norm.size())
             L2 = L2.div(norm)
             if len((norm == 0).nonzero()):
                 print('Zero norm!!')
-        # print('L2 normalized:', L2.size())
         attn = self.conv3(L2)
-        # print('attn:', attn.size())
         attn_sm = self.sm(attn)
-        # print('attn_sm:', attn_sm)
         attn_reshape = attn_sm.transpose(1, 2)
-        # print('attn_reshape:', attn_reshape)
-        # print('context:', context.size())
-        weighted_context = torch.bmm(context.transpose(1, 2),
+        weighted_context = torch.bmm(context,
                                      attn_reshape).squeeze(2)  # batch x dim
-        # print('weighted ctx:', weighted_context.size())
         h_tilde = torch.cat((weighted_context, input), 1)
         h_tilde = self.tanh(self.linear_out(h_tilde))
-        # print('htidle:', h_tilde.size())
         return h_tilde, attn
 
 
 class ConvAttentionHidCat(nn.Module):
     """
     Convolutional attention
-    Use the encoder hidden states al around
+    Use the encoder hidden states all around, Jakob's idea
     """
 
     def __init__(self, opt):
-        """Initialize layer."""
         super(ConvAttentionHidCat, self).__init__()
         src_dim = opt.rnn_size_src
-        interm_dim = src_dim // 2  # k1
-        final_dim = interm_dim // 2  # k2
-        dim = opt.rnn_size_trg
+        dims = opt.attention_channels.split(',')
+        dim1, dim2 = [int(d) for d in dims]
+        print('Out channels dims:', dim1, dim2)
+        trg_dim = opt.rnn_size_trg
         self.normalize = opt.normalize_attention
-        w1 = 9  # first kernel width
-        w2 = 7  # second kernel width
-        w3 = 5
-        # check if padding necessary
+        widths = opt.attention_windows.split(',')
+        w1, w2, w3 = [int(w) for w in widths]
+        print('Moving windows sizes:', w1, w2, w3)
         # padding to maintaing the same length
-        self.conv1 = nn.Conv1d(src_dim + dim, interm_dim, w1, padding=(w1-1)//2)
+        self.conv1 = nn.Conv1d(src_dim + trg_dim, dim1, w1, padding=(w1-1)//2)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(interm_dim, final_dim, w2, padding=(w2-1)//2)
-        self.conv3 = nn.Conv1d(final_dim, 1, w3, padding=(w3-1)//2)
+        self.conv2 = nn.Conv1d(dim1, dim2, w2, padding=(w2-1)//2)
+        self.conv3 = nn.Conv1d(dim2, 1, w3, padding=(w3-1)//2)
         self.sm = nn.Softmax(dim=2)
-        self.linear_out = nn.Linear(dim + src_dim, dim, bias=False)
+        self.linear_out = nn.Linear(trg_dim + src_dim, trg_dim, bias=False)
         self.tanh = nn.Tanh()
 
     def forward(self, input, context, src_emb):
@@ -176,22 +181,13 @@ class ConvAttentionHidCat(nn.Module):
         context: batch x sourceL x dim
         """
         context = context.transpose(1, 2)
-        # print('context:', context.size())
-        # print('input', input.size())
         input_cat = torch.cat((context,
                                input.unsqueeze(2).repeat(1,
                                                          1,
                                                          context.size(2))),
                               1)
-        # print('Cat:', input_cat.size())
         L1 = self.relu(self.conv1(input_cat))
-        # print('L1:', L1.size())
         L2 = self.conv2(L1)
-        # print('L2:', L2.size())
-        # columnwise dot product
-        # print('input:', input.size())
-        # L2 = L2 * input.unsqueeze(2).repeat(1, 1, L2.size(2))
-        # print('L2 after dot product:', L2.size())
         # L2 normalization:
         if self.normalize:
             norm = L2.norm(p=2, dim=2, keepdim=True)
@@ -200,82 +196,12 @@ class ConvAttentionHidCat(nn.Module):
                 print('Zero norm!!')
         # print('L2 normalized:', L2.size())
         attn = self.conv3(L2)
-        # print('attn:', attn.size())
         attn_sm = self.sm(attn)
-        # print('attn_sm:', attn_sm.size())
         attn_reshape = attn_sm.transpose(1, 2)
-        # print('attn_reshape:', attn_reshape.size())
-        # print('context:', context.size())
         weighted_context = torch.bmm(context,
                                      attn_reshape).squeeze(2)  # batch x dim
-        # print('weighted ctx:', weighted_context.size())
         h_tilde = torch.cat((weighted_context, input), 1)
         h_tilde = self.tanh(self.linear_out(h_tilde))
-        # print('htidle:', h_tilde.size())
-        return h_tilde, attn
-
-
-class ConvAttentionHid(nn.Module):
-    """
-    Convolutional attention
-    Use the encoder hidden states al around
-    """
-
-    def __init__(self, opt):
-        """Initialize layer."""
-        super(ConvAttentionHid, self).__init__()
-        src_dim = opt.rnn_size_src
-        interm_dim = src_dim // 2  # k1
-        dim = opt.rnn_size_trg  # k2
-        self.normalize = opt.normalize_attention
-        w1 = 9  # first kernel width
-        w2 = 7  # second kernel width
-        w3 = 5
-        # check if padding necessary
-        # padding to maintaing the same length
-        self.conv1 = nn.Conv1d(src_dim, interm_dim, w1, padding=(w1-1)//2)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(interm_dim, dim, w2, padding=(w2-1)//2)
-        self.conv3 = nn.Conv1d(dim, 1, w3, padding=(w3-1)//2)
-        self.sm = nn.Softmax(dim=2)
-        self.linear_out = nn.Linear(dim + src_dim, dim, bias=False)
-        self.tanh = nn.Tanh()
-
-    def forward(self, input, context, src_emb):
-        """Propogate input through the network.
-        input: batch x dim
-        context: batch x sourceL x dim
-        """
-        context = context.transpose(1, 2)
-        # print('src_emb:', src_emb.size())
-        L1 = self.relu(self.conv1(context))
-        # print('L1:', L1.size())
-        L2 = self.conv2(L1)
-        # print('L2:', L2.size())
-        # columnwise dot product
-        # print('input:', input.size())
-        L2 = L2 * input.unsqueeze(2).repeat(1, 1, L2.size(2))
-        # print('L2 after dot product:', L2.size())
-        # L2 normalization:
-        if self.normalize:
-            norm = L2.norm(p=2, dim=2, keepdim=True)
-            L2 = L2.div(norm)
-            if len((norm == 0).nonzero()):
-                print('Zero norm!!')
-        # print('L2 normalized:', L2.size())
-        attn = self.conv3(L2)
-        # print('attn:', attn.size())
-        attn_sm = self.sm(attn)
-        # print('attn_sm:', attn_sm)
-        attn_reshape = attn_sm.transpose(1, 2)
-        # print('attn_reshape:', attn_reshape)
-        # print('context:', context.size())
-        weighted_context = torch.bmm(context,
-                                     attn_reshape).squeeze(2)  # batch x dim
-        # print('weighted ctx:', weighted_context.size())
-        h_tilde = torch.cat((weighted_context, input), 1)
-        h_tilde = self.tanh(self.linear_out(h_tilde))
-        # print('htidle:', h_tilde.size())
         return h_tilde, attn
 
 
@@ -288,7 +214,6 @@ class LocalDotAttention(nn.Module):
     """
 
     def __init__(self, opt):
-        """Initialize layer."""
         super(LocalDotAttention, self).__init__()
         dim = opt.rnn_size_trg
         dropout = opt.attention_dropout
@@ -345,7 +270,6 @@ class SoftDotAttention(nn.Module):
     """
 
     def __init__(self, opt):
-        """Initialize layer."""
         super(SoftDotAttention, self).__init__()
         dim = opt.rnn_size_trg
         dropout = opt.attention_dropout
@@ -382,7 +306,6 @@ class LSTMAttention(nn.Module):
     """
 
     def __init__(self, opt):
-        """Initialize params."""
         super(LSTMAttention, self).__init__()
         # Params:
         self.mode = opt.attention_mode
@@ -399,10 +322,10 @@ class LSTMAttention(nn.Module):
             self.attention_layer = SoftDotAttention(opt)
         elif self.mode == "local-dot":
             self.attention_layer = LocalDotAttention(opt)
-        elif self.mode == "conv":
-            self.attention_layer = ConvAttentionEmb(opt)
-        elif self.mode == "conv2":
-            self.attention_layer = ConvAttentionEmb2(opt)
+        elif self.mode == "allamanis":
+            self.attention_layer = AllamanisConvAttention(opt)
+        elif self.mode == "allamanis-v2":
+            self.attention_layer = AllamanisConvAttentionBis(opt)
         elif self.mode == "conv3":
             self.attention_layer = ConvAttentionHid(opt)
         elif self.mode == "conv4":
@@ -415,10 +338,7 @@ class LSTMAttention(nn.Module):
         """Propogate input through the network."""
         def recurrence(input, hidden):
             """Recurrence helper."""
-            hx, cx = hidden  # n_b x hidden_dim
-            # print('In front of the gates:')
-            # print('input:', input.size())
-            # print('hx:', hx.size())
+            hx, cx = hidden  # n_b x hidden_dim #FIXME Assuming LSTM
             gates = self.input_weights(input) + \
                 self.hidden_weights(hx)
             ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
@@ -430,8 +350,7 @@ class LSTMAttention(nn.Module):
 
             cy = (forgetgate * cx) + (ingate * cellgate)
             hy = outgate * F.tanh(cy)  # n_b x hidden_dim
-            h_tilde, alpha = self.attention_layer(hy, ctx, src_emb)
-
+            h_tilde, _ = self.attention_layer(hy, ctx, src_emb)
             return h_tilde, cy
 
         input = input.transpose(0, 1)
@@ -447,4 +366,44 @@ class LSTMAttention(nn.Module):
         output = torch.cat(output, 0).view(input.size(0), *output[0].size())
         output = output.transpose(0, 1)
         return output, hidden
+
+
+class LSTMAttentionV2(LSTMAttention):
+    """
+    A long short-term memory (LSTM) cell with attention.
+    Use SoftDotAttention
+    """
+
+    def __init__(self, opt):
+        super(LSTMAttentionV2, self).__init__(opt)
+
+    def forward(self, input, hidden, ctx, src_emb):
+        """Propogate input through the network."""
+        def recurrence(input, hidden):
+            """Recurrence helper."""
+            hx, cx = hidden  # n_b x hidden_dim #FIXME Assuming LSTM
+            gates = self.input_weights(input) + \
+                self.hidden_weights(hx)
+            ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
+
+            ingate = F.sigmoid(ingate)
+            forgetgate = F.sigmoid(forgetgate)
+            cellgate = F.tanh(cellgate)
+            outgate = F.sigmoid(outgate)
+
+            cy = (forgetgate * cx) + (ingate * cellgate)
+            hy = outgate * F.tanh(cy)  # n_b x hidden_dim
+            h_tilde, _ = self.attention_layer(hy, ctx, src_emb)
+            return h_tilde, (hy, cy)
+
+        input = input.transpose(0, 1)
+        output = []
+        steps = list(range(input.size(0)))
+        for i in steps:
+            htilde, hidden = recurrence(input[i], hidden)
+            output.append(htilde)
+        output = torch.cat(output, 0).view(input.size(0), *output[0].size())
+        output = output.transpose(0, 1)
+        return output, hidden
+
 

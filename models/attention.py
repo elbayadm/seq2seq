@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from .beam_search import Beam
 from .seq2seq import Seq2Seq
-from .lstm import LSTMAttention
+from .lstm import LSTMAttention, LSTMAttentionV2
 _BOS = 3
 _EOS = 2
 _UNK = 1
@@ -31,8 +31,10 @@ class Attention(Seq2Seq):
         if opt.parallel:
             self.encoder = nn.DataParallel(self.encoder)
             self.pack_seq = 0
-        self.decoder = LSTMAttention(opt)
-
+        if opt.lstm_mode == 1:
+            self.decoder = LSTMAttention(opt)
+        elif opt.lstm_mode == 2:
+            self.decoder = LSTMAttentionV2(opt)
         self.init_weights()
 
     def get_decoder_init_state(self, input_src, src_lengths):
