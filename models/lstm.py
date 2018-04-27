@@ -397,7 +397,7 @@ class LSTMAttention(nn.Module):
 
         if self.mode == "dot":
             self.attention_layer = SoftDotAttention(opt)
-        if self.mode == "local-dot":
+        elif self.mode == "local-dot":
             self.attention_layer = LocalDotAttention(opt)
         elif self.mode == "conv":
             self.attention_layer = ConvAttentionEmb(opt)
