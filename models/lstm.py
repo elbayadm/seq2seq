@@ -83,6 +83,10 @@ class AllamanisConvAttentionBis(AllamanisConvAttention):
 
     def __init__(self, opt):
         super(AllamanisConvAttentionBis, self).__init__(opt)
+        trg_dim = opt.rnn_size_trg
+        src_dim = opt.rnn_size_src
+        self.linear_out = nn.Linear(trg_dim + src_dim, trg_dim, bias=False)
+
 
     def forward(self, input, context, src_emb):
         attn_sm = self.score(input, context, src_emb)
@@ -158,19 +162,34 @@ class ConvAttentionHidCat(nn.Module):
     def __init__(self, opt):
         super(ConvAttentionHidCat, self).__init__()
         src_dim = opt.rnn_size_src
-        dims = opt.attention_channels.split(',')
-        dim1, dim2 = [int(d) for d in dims]
-        print('Out channels dims:', dim1, dim2)
         trg_dim = opt.rnn_size_trg
         self.normalize = opt.normalize_attention
         widths = opt.attention_windows.split(',')
-        w1, w2, w3 = [int(w) for w in widths]
-        print('Moving windows sizes:', w1, w2, w3)
+        self.num_conv_layers = len(widths)
+        dims = opt.attention_channels.split(',')
+        assert len(dims) == self.num_conv_layers - 1
+        if self.num_conv_layers == 3:
+            w1, w2, w3 = [int(w) for w in widths]
+            print('Moving windows sizes:', w1, w2, w3)
+            dim1, dim2 = [int(d) for d in dims]
+            print('Out channels dims:', dim1, dim2)
+        elif self.num_conv_layers == 4:
+            w1, w2, w3, w4 = [int(w) for w in widths]
+            print('Moving windows sizes:', w1, w2, w3, w4)
+            dim1, dim2, dim3 = [int(d) for d in dims]
+            print('Out channels dims:', dim1, dim2, dim3)
+        else:
+            raise ValueError('Number of layers is either 3 or 4, still working on a general form')
         # padding to maintaing the same length
         self.conv1 = nn.Conv1d(src_dim + trg_dim, dim1, w1, padding=(w1-1)//2)
         self.relu = nn.ReLU()
         self.conv2 = nn.Conv1d(dim1, dim2, w2, padding=(w2-1)//2)
-        self.conv3 = nn.Conv1d(dim2, 1, w3, padding=(w3-1)//2)
+        if self.num_conv_layers == 3:
+            self.conv3 = nn.Conv1d(dim2, 1, w3, padding=(w3-1)//2)
+        elif self.num_conv_layers == 4:
+            self.conv3 = nn.Conv1d(dim2, dim3, w3, padding=(w3-1)//2)
+            self.conv4 = nn.Conv1d(dim3, 1, w4, padding=(w4-1)//2)
+
         self.sm = nn.Softmax(dim=2)
         self.linear_out = nn.Linear(trg_dim + src_dim, trg_dim, bias=False)
         self.tanh = nn.Tanh()
@@ -195,7 +214,10 @@ class ConvAttentionHidCat(nn.Module):
             if len((norm == 0).nonzero()):
                 print('Zero norm!!')
         # print('L2 normalized:', L2.size())
-        attn = self.conv3(L2)
+        if self.num_conv_layers == 3:
+            attn = self.conv3(L2)
+        else:
+            attn = self.conv4(self.conv3(L2))
         attn_sm = self.sm(attn)
         attn_reshape = attn_sm.transpose(1, 2)
         weighted_context = torch.bmm(context,
@@ -322,13 +344,13 @@ class LSTMAttention(nn.Module):
             self.attention_layer = SoftDotAttention(opt)
         elif self.mode == "local-dot":
             self.attention_layer = LocalDotAttention(opt)
-        elif self.mode == "allamanis":
+        elif self.mode == "allamanis":  # conv
             self.attention_layer = AllamanisConvAttention(opt)
-        elif self.mode == "allamanis-v2":
+        elif self.mode == "allamanis-v2":  # conv2
             self.attention_layer = AllamanisConvAttentionBis(opt)
-        elif self.mode == "conv3":
+        elif self.mode == "conv-hid":   # conv3
             self.attention_layer = ConvAttentionHid(opt)
-        elif self.mode == "conv4":
+        elif self.mode == "conv-hid-cat":  # conv4
             self.attention_layer = ConvAttentionHidCat(opt)
         else:
             raise ValueError('Unkown attention mode %s' % self.mode)
