@@ -28,7 +28,7 @@ def decode_sequence(ix_to_word, seq):
     for i in range(N):
         txt = []
         for j in range(D):
-            ix = seq[i, j]
+            ix = seq[i, j].item()
             if ix > 0 and not ix == _EOS:
                 if ix == _BOS:
                     continue
