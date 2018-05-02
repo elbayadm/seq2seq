@@ -5,7 +5,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import loss
-import utils
 
 
 class Seq2Seq(nn.Module):
@@ -183,54 +182,20 @@ class Seq2Seq(nn.Module):
                         self.logger.warn('Issue the key %s' % k)
             self.load_state_dict(saved)
 
-    def step(self, optimizer,
+    def step(self,
              input_lines_src, src_lengths,
              input_lines_trg, trg_lengths,
              output_lines_trg, mask):
         opt = self.opt
-        optimizer.zero_grad()
-        if opt.loss_version.lower() == "seq":
-            # Avoid re-encoding the sources when sampling other targets
-            if opt.alter_seq:
-                src_emb, src_code, state = self.get_decoder_init_state(input_lines_src, src_lengths)
-                ml_loss, stats, logp = self.crit.forward_gt(self, src_emb, src_code, state,
-                                                            input_lines_trg,
-                                                            trg_lengths,
-                                                            output_lines_trg,
-                                                            mask)
-                ml_loss_value = ml_loss.data.item()
-                ml_loss = ml_loss * (1 - self.crit.alpha)
-                ml_loss.backward(retain_graph=True)
-                grad_norm = utils.clip_gradient(optimizer, opt.grad_clip)
-                optimizer.step()
-                ml_loss.detach()
-                optimizer.zero_grad()
-                reward_loss, stats_ = self.crit.forward_sampled(self, src_emb, src_code, state,
-                                                                trg_lengths, output_lines_trg,
-                                                                logp,
-                                                                mask)
-                stats.update(stats_)
-                reward_loss *= self.crit.alpha
-                reward_loss.backward()
-                grad_norm += utils.clip_gradient(optimizer, opt.grad_clip)
-                optimizer.step()
-                grad_norm /= 2
-                final_loss_value = ml_loss_value + reward_loss.data.item()
+        version = opt.loss_version.lower()
+        if version == "seq":
+            src_emb, src_code, state = self.get_decoder_init_state(input_lines_src, src_lengths)
+            ml_loss, reward_loss, stats = self.crit(self, src_emb, src_code, state,
+                                                    input_lines_trg,
+                                                    trg_lengths,
+                                                    output_lines_trg,
+                                                    mask)
 
-            else:
-                src_emb, src_code, state = self.get_decoder_init_state(input_lines_src, src_lengths)
-                ml_loss, reward_loss, stats = self.crit(self, src_emb, src_code, state,
-                                                        input_lines_trg,
-                                                        trg_lengths,
-                                                        output_lines_trg,
-                                                        mask)
-
-                final_loss = self.crit.alpha * reward_loss + (1 - self.crit.alpha) * ml_loss
-                final_loss.backward()
-                grad_norm = utils.clip_gradient(optimizer, opt.grad_clip)
-                optimizer.step()
-                final_loss_value = final_loss.data.item()
-                ml_loss_value = ml_loss.data.item()
         else:  # ML & Token-level
             # init and forward decoder combined
             decoder_logit = self.forward(input_lines_src, src_lengths, input_lines_trg, trg_lengths)
@@ -238,16 +203,11 @@ class Seq2Seq(nn.Module):
                                                     output_lines_trg,
                                                     mask)
 
-            if opt.loss_version.lower() == "ml":
-                final_loss = ml_loss
-            else:
-                final_loss = self.crit.alpha * reward_loss + (1 - self.crit.alpha) * ml_loss
-            final_loss.backward()
-            grad_norm = utils.clip_gradient(optimizer, opt.grad_clip)
-            optimizer.step()
-            final_loss_value = final_loss.data.item()
-            ml_loss_value = ml_loss.data.item()
-        return ml_loss_value, final_loss_value, grad_norm, stats
+        if version == "ml":
+            final_loss = ml_loss
+        else:
+            final_loss = self.crit.alpha * reward_loss + (1 - self.crit.alpha) * ml_loss
+        return ml_loss, final_loss, stats
 
 
 
