@@ -138,14 +138,18 @@ def train(opt):
         optimizer.zero_grad()
         ml_loss, loss, stats = model.step(input_lines_src, src_lengths, input_lines_trg, trg_lengths, output_lines_trg, mask)
         optimizer.zero_grad()
+        # for obj in gc.get_objects():
+            # if torch.is_tensor(obj):
+                # print(type(obj), obj.size())
+        gc.collect()
         loss.backward()
         grad_norm = []
         grad_norm.append(utils.clip_gradient(optimizer, opt.grad_clip))
         optimizer.step()
         # train_loss = loss.data[0]
         # train_ml_loss = ml_loss.data[0]
-        train_loss = loss.data[0]
-        train_ml_loss = ml_loss.data[0]
+        train_loss = loss.data.item()
+        train_ml_loss = ml_loss.data.item()
         if np.isnan(train_loss):
             sys.exit('Loss is nan')
         torch.cuda.synchronize()

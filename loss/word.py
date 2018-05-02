@@ -76,6 +76,7 @@ class WordSmoothCriterion(nn.Module):
         # Load the similarity matrix:
         M = pl(opt.similarity_matrix)
         self.dense = isinstance(M, np.ndarray)
+        self.rare = opt.promote_rarity
         if self.dense:
             if not self.use_cooc:
                 M = M - 1  # = -D_ij
@@ -90,11 +91,12 @@ class WordSmoothCriterion(nn.Module):
         else:
             if opt.promote_rarity:
                 IDF = pl(opt.rarity_matrix)
-                M -= self.tau_word * opt.promote_rarity * IDF
+                self.IDF = sparse_torch(IDF).cuda()
                 del IDF
             self.Sim_Matrix = sparse_torch(M).cuda()
             n, d = self.Sim_Matrix.size()
-        print('Sim matrix:', n, 'x', d, ' V=', opt.vocab_size)
+        del M
+        self.logger.info('Sim matrix: (%dx%d) & Vocab:%d' % (n, d, opt.vocab_size))
         assert n == d and n == opt.vocab_size, 'Similarity matrix has incompatible shape'
         self.vocab_size = opt.vocab_size
 
@@ -110,29 +112,36 @@ class WordSmoothCriterion(nn.Module):
     def get_submatrix(self, row_select):
         """
         Return a submatrix of a torch.SparseTensor
+        # M -= self.tau_word * opt.promote_rarity * IDF
+
         """
-        start = time.time()
         nr, nc = self.Sim_Matrix.size()
         dvalue = -1
         if self.tau_word:
             dvalue = exp(-1/self.tau_word)
-        subT = dvalue * torch.ones(len(row_select), nc).float().cuda()
-        rows, cols = self.Sim_Matrix._indices()
+        # subT = dvalue * torch.ones(len(row_select), nc).float().cuda()
+        subT = dvalue * torch.ones(len(row_select), NNZ).float().cuda()
+        col_indices = []
+        _, cols = self.Sim_Matrix._indices()
         # Selct rows from row_select
         for e, ind in enumerate(row_select):
             ind = int(ind)
-            # ind row covers the range 4000*ind :: 4000*(ind+1)
+            # ind row covers the range NNZ*ind :: NNZ*(ind+1)
             # slice_index = np.where(rows.cpu().numpy() == ind)
             # slice_index = np.arange(NNZ*ind, NNZ*(ind+1))
             slice_index = torch.arange(NNZ*ind, NNZ*(ind+1)).long().cuda()
             row_values = self.Sim_Matrix._values()[slice_index]
             row_values -= 1
             if self.tau_word:
+                if self.rare:
+                    row_values -= self.tau_word * self.rare * self.IDF._values()[slice_index]
                 row_values = torch.exp(row_values/self.tau_word)
                 row_values = torch.exp(torch.mul(row_values, 1/self.tau_word))
-            l1 = torch.sum(row_values) + (nc - NNZ) * dvalue  # float
-            subT[e][cols[slice_index]] = row_values/l1
-        return subT
+            l1 = torch.sum(row_values)  # + (nc - NNZ) * dvalue  # float
+            # subT[e][cols[slice_index]] = row_values/l1
+            subT[e] = row_values/l1
+            col_indices.append(cols[slice_index].unsqueeze(0))
+        return subT, torch.cat(col_indices, 0)
 
     def forward_sparse(self, logp, target, mask, scores=None):
         # truncate to the same size
@@ -149,22 +158,20 @@ class WordSmoothCriterion(nn.Module):
         # Get the similarities of the words in the batch (NxL, V)
         logp = to_contiguous(logp).view(-1, logp.size(2))
         indices = to_contiguous(target).view(-1, 1).squeeze().data
-        sim = self.get_submatrix(indices.cpu().numpy())
-        sim = Variable(sim, requires_grad=False).cuda()
+        sim, col_indices = self.get_submatrix(indices.cpu().numpy())
         mask = to_contiguous(mask).view(-1, 1)
+        sim = Variable(sim, requires_grad=False).cuda()
+        # gathering rows of logp:
+        logp = logp.gather(1, col_indices)
         output = - logp * sim
-        # output = - logp * sim
-        del sim
-        gc.collect()
         if self.normalize_batch:
-            if torch.sum(mask).data[0] > 0:
+            if torch.sum(binary_mask).data.item() > 0:
                 output = torch.sum(output) / torch.sum(binary_mask)
             else:
                 self.logger.warn("Smooth targets weights sum to 0")
                 output = torch.sum(output)
         else:
             output = torch.sum(output)
-
         return ml_output, output, {}
 
     def forward_dense(self, logp, target, mask, scores=None):
