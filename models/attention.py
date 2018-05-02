@@ -123,7 +123,7 @@ class Attention(Seq2Seq):
         beam_size = opt.get('beam_size', 3)
         batch_size = input_src.size(0)
         # encode the source
-        src_code, state = self.get_decoder_init_state(input_src, src_lengths)
+        src_emb, src_code, state = self.get_decoder_init_state(input_src, src_lengths)
         # src_code N x T x D
         # state 2 * (N x D)
         # context = Variable(src_code.data.repeat(beam_size, 1, 1))
@@ -146,7 +146,7 @@ class Attention(Seq2Seq):
             trg_h, dec_states = self.decoder(trg_emb,
                                              dec_states,
                                              context,
-                                             src_emb=src_emb)
+                                             src_emb)
             trg_h_reshape = trg_h.contiguous().view(
                 trg_h.size()[0] * trg_h.size()[1],
                 trg_h.size()[2]

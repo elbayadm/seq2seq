@@ -211,8 +211,8 @@ def evaluate_model(model, src_loader, trg_loader, logger, eval_kwargs):
                                       input_lines_trg_gold, trg_lengths,
                                       output_lines_trg_gold,
                                       mask)
-        loss_sum += loss.data.item()
-        ml_loss_sum += ml_loss.data.item()
+        loss_sum += loss.data
+        ml_loss_sum += ml_loss.data[0]
         loss_evals = loss_evals + 1
         # Initialize target with <BOS> for every sentence Index = 2
         # print('Sampling sentence')
