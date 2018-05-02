@@ -32,17 +32,10 @@ def log_epoch(writer, iteration, opt,
     add_summary_value(writer, 'train/ml_loss', train_ml_loss, iteration)
     add_summary_value(writer, 'learning_rate', opt.current_lr, iteration)
     add_summary_value(writer, 'scheduled_sampling_prob', ss_prob, iteration)
-    add_summary_value(writer, 'RNN_grad_norm', grad_norm[0], iteration)
+    add_summary_value(writer, 'RNN_grad_norm', grad_norm, iteration)
     if stats:
         for k in stats:
             add_summary_value(writer, k, stats[k], iteration)
-
-    try:
-        add_summary_value(writer, 'CNN_grad_norm', grad_norm[1], iteration)
-        add_summary_value(writer, 'CNN_learning_rate', opt.current_cnn_lr, iteration)
-
-    except:
-        pass
     try:
         train_kld_loss = losses['train_kld_loss']
         train_recon_loss = losses['train/recon_loss']
@@ -95,12 +88,8 @@ def stderr_epoch(epoch, iteration, opt, losses, grad_norm, ttt):
     train_loss = losses['train_loss']
     train_ml_loss = losses['train_ml_loss']
     message = "iter {} (epoch {}), train_ml_loss = {:.3f}, train_loss = {:.3f}, lr = {:.2e}, grad_norm = {:.3e}"\
-               .format(iteration, epoch, train_ml_loss,  train_loss, opt.current_lr, grad_norm[0])
+               .format(iteration, epoch, train_ml_loss,  train_loss, opt.current_lr, grad_norm)
 
-    try:
-        message += ", cnn_lr = {:.2e}, cnn_grad_norm = {:.3e}".format(opt.current_cnn_lr, grad_norm[1])
-    except:
-        pass
     try:
         train_kld_loss = losses['train_kld_loss']
         train_recon_loss = losses['train_recon_loss']

@@ -1,3 +1,4 @@
+import gc
 import random
 import math
 from collections import OrderedDict
@@ -40,6 +41,79 @@ class RewardSampler(nn.Module):
             self.loss_gt.log()
             self.logger.info('Sampled loss:')
             self.loss_sampled.log()
+
+    def forward_gt(self, model,
+                   src_emb, src_code, state,
+                   input_lines_trg,
+                   trg_lengths,
+                   output_lines_trg,
+                   mask, scores=None):
+
+        ilabels = input_lines_trg
+        olabels = output_lines_trg
+        logp = model.forward_decoder(src_emb, src_code, state,
+                                     ilabels,
+                                     trg_lengths)
+
+        # Remove BOS token
+        seq_length = logp.size(1)
+        target = olabels[:, :seq_length]
+        del olabels, ilabels
+        mask = mask[:, :seq_length]
+        if scores is not None:
+            print('scaling the masks')
+            # FIXME see to it that i do not normalize with scaled masks
+            row_scores = scores.repeat(1, seq_length)
+            mask = torch.mul(mask, row_scores)
+
+        # GT loss
+        loss_gt, stats = self.batch_loss_lazy(logp, target, mask, scores)
+        return loss_gt, stats, logp
+
+    def forward_sampled(self, model,
+                        src_emb, src_code, state,
+                        trg_lengths,
+                        output_lines_trg, logp,
+                        mask, scores=None):
+
+        olabels = output_lines_trg
+        # Remove BOS token
+        seq_length = logp.size(1)
+        target = olabels[:, :seq_length]
+        del olabels
+        gc.collect()
+        mask = mask[:, :seq_length]
+        if scores is not None:
+            print('scaling the masks')
+            # FIXME see to it that i do not normalize with scaled masks
+            row_scores = scores.repeat(1, seq_length)
+            mask = torch.mul(mask, row_scores)
+
+        # Sampling loss
+        if self.training:
+            MC = self.mc_samples
+        else:
+            MC = 1
+        for mci in range(MC):
+            ipreds_matrix, opreds_matrix, _, stats = self.sampler.nmt_sample(logp, target)
+            if self.lazy_rnn:
+                mc_output, stats_sampled = self.batch_loss_lazy(logp, opreds_matrix,
+                                                                mask, scores)
+            else:
+                # Forward the sampled sentences properly
+                mc_output, stats_sampled = self.batch_loss(model,
+                                                           src_emb, src_code, state,
+                                                           ipreds_matrix,
+                                                           trg_lengths,
+                                                           opreds_matrix,
+                                                           mask, scores)
+            if not mci:
+                output = mc_output
+            else:
+                output += mc_output
+            gc.collect()
+        output /= MC
+        return output, stats
 
     def forward(self, model,
                 src_emb, src_code, state,
@@ -131,7 +205,7 @@ class RewardSampler(nn.Module):
         else:
             ml = get_ml_loss(logp, target, mask, scores)
             loss = ml
-            stats = None
+            stats = {}
         return loss, stats
 
 

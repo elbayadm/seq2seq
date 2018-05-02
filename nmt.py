@@ -136,26 +136,20 @@ def train(opt):
                                                    for _ in tmp]
         trg_lengths = data_trg['lengths']
         optimizer.zero_grad()
-        ml_loss, loss, stats = model.step(input_lines_src, src_lengths, input_lines_trg, trg_lengths, output_lines_trg, mask)
-        optimizer.zero_grad()
+        ml_loss, loss, grad_norm, stats = model.step(optimizer,
+                                                     input_lines_src, src_lengths,
+                                                     input_lines_trg, trg_lengths,
+                                                     output_lines_trg, mask)
         # for obj in gc.get_objects():
             # if torch.is_tensor(obj):
                 # print(type(obj), obj.size())
         gc.collect()
-        loss.backward()
-        grad_norm = []
-        grad_norm.append(utils.clip_gradient(optimizer, opt.grad_clip))
-        optimizer.step()
-        # train_loss = loss.data[0]
-        # train_ml_loss = ml_loss.data[0]
-        train_loss = loss.data.item()
-        train_ml_loss = ml_loss.data.item()
-        if np.isnan(train_loss):
+        if np.isnan(loss):
             sys.exit('Loss is nan')
         torch.cuda.synchronize()
         end = time.time()
-        losses = {'train_loss': train_loss,
-                  'train_ml_loss': train_ml_loss}
+        losses = {'train_loss': loss,
+                  'train_ml_loss': ml_loss}
         lg.stderr_epoch(epoch, iteration, opt, losses, grad_norm, end-start)
         # Update the iteration and epoch
         iteration += 1

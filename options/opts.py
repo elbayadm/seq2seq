@@ -74,6 +74,8 @@ def add_loss_params(parser):
                ml: cross entropy,\
                word: word smoothing,\
                seq: sentence smoothing')
+    parser.add('--alter_seq', type=int,
+               default=0, help='Process the sampled sentences at the following iteration')
     # Generic loss parameters:
     parser.add('--normalize_batch', type=int,
                default=1, help='whether to normalize the batch loss via the mask')
