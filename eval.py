@@ -122,9 +122,9 @@ if __name__ == "__main__":
         # print('Training loss:', loss)
         perf = {}
         perf['Bleu'] = bleu_moses
-        perf['loss'] = loss
+        perf['loss'] = float(loss)
         print('Results:', perf)
-        perf['ml_loss'] = ml_loss
+        perf['ml_loss'] = float(ml_loss)
         perf['params'] = eval_kwargs
         perf['params']['logger'] = None
 
