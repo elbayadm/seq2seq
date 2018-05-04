@@ -125,8 +125,8 @@ def get_results(model, split='val', verbose=False):
     return compiled
 
 
-def crawl_results_paper(fltr=[], exclude=[], split="test", verbose=False, beam=-1):
-    models = glob.glob('save/*')
+def crawl_results_paper(fltr=[], exclude=[], split="test", verbose=False, beam=-1, dir=""):
+    models = glob.glob('save/%s*' % dir)
     models = [model for model in models if is_required(model, fltr, exclude)]
     tab = PrettyTable()
     tab.field_names = PAPER_FIELDS
@@ -224,7 +224,7 @@ if __name__ == "__main__":
         filename = "results/%s%s_%s" % (split, fltr_concat, socket.gethostname())
         if not args.beam == -1:
             filename += '_bw%d' % args.beam
-        tab = crawl_results_paper(fltr, exc, split, verbose, args.beam)
+        tab = crawl_results_paper(fltr, exc, split, verbose, args.beam, args.dir)
         print(tab.get_string(sortby=args.sort, reversesort=True, fields=PAPER_FIELDS_SELECT))
         print('saving latex table in %s.tex' % filename)
         with open(filename+'.tex', 'w') as f:
