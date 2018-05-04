@@ -20,7 +20,10 @@ def hamming_distrib_soft(m, v, tau):
 
 
 def hamming_distrib(m, v, tau):
-    x = [comb(m, d, exact=False) * (v-1)**d * math.exp(-d/tau) for d in range(m+1)]
+    try:
+        x = [comb(m, d, exact=False) * (v-1)**d * math.exp(-d/tau) for d in range(m+1)]
+    except:
+        x = [comb(m, d, exact=False) * ((v-1) * math.exp(-1/tau))**d for d in range(m+1)]
     x = np.absolute(np.array(x))  # FIXME negative values occuring !!
     Z = np.sum(x)
     return x/Z, Z
