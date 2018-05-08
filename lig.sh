@@ -19,7 +19,7 @@ mkdir -p 'save/'$JOB
 
 if [ $BQ ]; then
     echo "Submitting to besteffort queue"
-    cmd="oarsub -l \"walltime=160:0:0\" -n $JOB \
+    cmd="oarsub -l \"walltime=160:0:0\" -n ${JOB:0:50} \
            -t besteffort -t idempotent \
            -O  save/$JOB/stdout -E save/$JOB/stderr\
            'python nmt.py -c config/'$JOB'.yaml'"
@@ -27,7 +27,7 @@ if [ $BQ ]; then
     eval $cmd
 else
     echo "Submitting to default queue"
-    cmd="oarsub -l \"walltime=160:0:0\" -n $JOB \
+    cmd="oarsub -l \"walltime=160:0:0\" -n ${JOB:0:50} \
             -O  save/$JOB/stdout -E save/$JOB/stderr\
             'python nmt.py -c config/'$JOB'.yaml'"
     eval $cmd
