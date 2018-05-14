@@ -1,0 +1,18 @@
+modelname : strat_lazy_rhamming_pool1_tsent013_a03_wmt14
+model: attention
+
+# Data:
+input_data_src: data/WMT14/run2/en_src_cmp
+input_data_trg: data/WMT14/run2/fr_trg_cmp
+
+# batch_size: 10
+# valid_batch_size: 25
+
+# Loss:
+loss_version : seq
+reward : hamming
+stratify_reward  : 1
+tau_sent : .13
+alpha_sent : 0.3
+max_epochs: 5
+lazy_rnn : 1

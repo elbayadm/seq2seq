@@ -1,0 +1,37 @@
+modelname : combine_strat_rhamming_pool1_tsent013_a03_word_idf_tword005_a04_wmt14_full
+model: attention
+decode : greedy
+
+# Data:
+input_data_src: data/WMT14_FULL/en_src
+input_data_trg: data/WMT14_FULL/fr_trg
+
+batch_size: 32
+valid_batch_size: 10
+max_epochs : 4
+learning_rate : 1e-4
+
+# encoder
+num_layers_src : 3
+rnn_size_src : 1024
+max_src_length : 80
+
+# decoder
+num_layers_src : 3
+rnn_size_trg : 1024
+max_trg_length : 80
+
+# Loss:
+loss_version : seq
+reward : hamming
+stratify_reward  : 1
+tau_sent : .13
+alpha_sent : 0.3
+combine_loss : 1
+
+
+tau_word : 0.05
+alpha_word : 0.4
+similarity_matrix : data/WMT14_FULL/glove_w15d300.sparse_sim
+promote_rarity : 1
+rarity_matrix : data/WMT14_FULL/promote_rare.sparse_matrix

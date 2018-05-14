@@ -1,0 +1,13 @@
+modelname : sample2_hamming_tsent013_a02_attend
+restart : 1
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+
+# Loss:
+loss_version : seq
+reward : hamming
+stratify_reward : 1
+tau_sent : .13
+alpha_sent : 0.2

@@ -1,0 +1,47 @@
+modelname : combine_strat_rhamming_pool1_tsent015_a07_word_idf_tword0045_a05_iwslt14_dpInEncEmb02 
+model: attention
+decode : greedy
+
+# Data:
+input_data_src: data/IWSLT14/de_src
+input_data_trg: data/IWSLT14/en_trg
+max_src_length : 45
+max_trg_length : 47
+
+input_encoder_dropout : .2
+encoder_dropout : .2
+enc2dec_dropout : .2
+input_decoder_dropout : .2
+attention_dropout : .0
+decoder_dropout : .0
+
+# config of Mixer (Ranzato et al.)
+batch_size: 32
+valid_batch_size: 32
+
+learning_rate : 0.001
+learning_rate_decay_every: 10
+learning_rate_decay_rate : 0.5
+max_epochs : 35
+
+dim_word_src : 128
+rnn_size_src : 256
+num_layers_src : 1
+
+dim_word_trg : 128
+rnn_size_trg : 256
+num_layers_trg : 1
+
+# Loss:
+loss_version : seq
+reward : hamming
+stratify_reward  : 1
+tau_sent : .15
+alpha_sent : 0.7
+# lazy_rnn : 1
+combine_loss : 1
+tau_word : 0.045
+alpha_word : 0.5
+similarity_matrix : data/IWSLT14/glove_w15d300.sim
+promote_rarity : 1
+rarity_matrix : data/IWSLT14/promote_rare.matrix

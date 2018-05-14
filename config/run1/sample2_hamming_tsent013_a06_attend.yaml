@@ -1,0 +1,17 @@
+modelname : sample2_hamming_tsent013_a06_attend
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+restart : 1
+
+# batch_size: 10
+# valid_batch_size: 25
+decode: greedy 
+model: attention
+
+# Loss:
+loss_version : seq
+reward: hamming
+tau_sent : .13
+alpha_sent : 0.6

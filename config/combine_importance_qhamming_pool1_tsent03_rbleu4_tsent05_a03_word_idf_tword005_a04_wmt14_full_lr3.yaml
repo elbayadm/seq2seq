@@ -1,0 +1,41 @@
+modelname : combine_importance_qhamming_pool1_tsent03_rbleu4_tsent05_a03_word_idf_tword005_a04_wmt14_full_lr3
+model: attention
+decode : greedy
+
+# Data:
+input_data_src: data/WMT14_FULL/en_src
+input_data_trg: data/WMT14_FULL/fr_trg
+
+batch_size: 32
+valid_batch_size: 10
+max_epochs : 4
+learning_rate : 5e-4
+
+# encoder
+num_layers_src : 3
+rnn_size_src : 1024
+max_src_length : 80
+
+# decoder
+num_layers_src : 3
+rnn_size_trg : 1024
+max_trg_length : 80
+
+# loss:
+loss_version : seq
+stratify_reward : 0
+alpha_sent : 0.3
+reward : bleu4
+tau_sent : 0.5
+
+importance_sampler : hamming
+tau_sent_q : 0.3
+limited_vocab_sub : 1
+
+combine_loss : 1
+
+tau_word : 0.05
+alpha_word : 0.4
+similarity_matrix : data/WMT14_FULL/glove_w15d300.sparse_sim
+promote_rarity : 1
+rarity_matrix : data/WMT14_FULL/promote_rare.sparse_matrix

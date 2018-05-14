@@ -1,0 +1,17 @@
+modelname : strat_rhamming_pool2_tsent03_a03
+model: attention
+
+# Data:
+input_data_src: data/WMT14/en_src_cmp
+input_data_trg: data/WMT14/fr_trg_cmp
+
+# batch_size: 10
+# valid_batch_size: 25
+max_epochs : 5
+# Loss:
+loss_version : seq
+reward : hamming
+limited_vocab_sub  : 2
+stratify_reward  : 1
+tau_sent : .3
+alpha_sent : 0.3

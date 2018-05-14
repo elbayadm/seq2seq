@@ -1,0 +1,18 @@
+modelname:  word_idf_tword005_a04_wmt14_b50
+
+# Data:
+input_data_src: data/WMT14/en_src
+input_data_trg: data/WMT14/fr_trg
+similarity_matrix : data/WMT14/glove_w15d300.sim
+rarity_matrix : data/WMT14/promote_rare.matrix
+
+restart : 1
+
+batch_size: 50
+valid_batch_size: 25
+
+# Loss
+loss_version: word
+alpha_word : 0.4
+tau_word: 0.05
+promote_rarity : 1

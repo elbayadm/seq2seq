@@ -1,0 +1,39 @@
+modelname:  baseline_iwslt14_convAtt4
+
+# Data:
+input_data_src: data/IWSLT14/de_src
+input_data_trg: data/IWSLT14/en_trg
+max_src_length : 45
+max_trg_length : 47
+input_encoder_dropout : .2
+encoder_dropout : .2
+enc2dec_dropout : .2
+input_decoder_dropout : .2
+attention_dropout : .0
+decoder_dropout : .0
+
+# config of Mixer (Ranzato et al.)
+batch_size: 32
+valid_batch_size: 32
+
+learning_rate : 0.001
+learning_rate_decay_every: 10
+learning_rate_decay_rate : 0.5
+max_epochs : 30
+
+dim_word_src : 128
+rnn_size_src : 256
+num_layers_src : 1
+
+dim_word_trg : 128
+rnn_size_trg : 256
+num_layers_trg : 1
+
+
+decode: greedy 
+model: attention
+attention_mode : conv4
+normalize_attention : 0
+# Loss
+loss_version : ml
+

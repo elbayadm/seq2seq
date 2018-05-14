@@ -1,0 +1,23 @@
+modelname:  baseline_wmt14_full_b32_lr3
+# Data:
+input_data_src: data/WMT14_FULL/en_src
+input_data_trg: data/WMT14_FULL/fr_trg
+
+batch_size: 32
+valid_batch_size: 25
+decode: greedy 
+model: attention
+max_epochs : 4
+# encoder
+num_layers_src : 3
+rnn_size_src : 1024
+max_src_length : 80
+
+# decoder
+num_layers_src : 3
+rnn_size_trg : 1024
+max_trg_length : 80
+
+# Loss
+loss_version : ml
+learning_rate : 5e-4
